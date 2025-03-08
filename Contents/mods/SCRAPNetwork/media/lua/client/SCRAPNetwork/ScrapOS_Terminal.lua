@@ -734,101 +734,6 @@ function SCRAP_Terminal:initDefaultModules()
         end
     })
 
-    self:loadModule("Admin Broadcast", {
-        messages = {},
-        currentMessageIndex = 1,
-        moduleSounds = {},
-
-        onActivate = function(self)
-            self:loadMessages()
-            self:showCurrentMessage()
-            -- Play activation sound if needed
-            -- self.moduleSounds.activationSound = TerminalSounds.playSound("admin_broadcast_open")
-        end,
-
-        onDeactivate = function(self)
-            for _, soundId in pairs(self.moduleSounds) do
-                TerminalSounds.stopSound(soundId)
-            end
-            self.moduleSounds = {}
-        end,
-
-        onClose = function(self)
-            self:onDeactivate()
-        end,
-
-        loadMessages = function(self)
-            if #self.messages == 0 then
-                self.terminal:setContent("NO ADMIN BROADCASTS AVAILABLE")
-            end
-        end,
-
-        showCurrentMessage = function(self)
-            if #self.messages == 0 then return end
-
-            local message = self.messages[self.currentMessageIndex]
-            local text = message.title ..
-                "\n\n" .. message.content .. "\n\nFrom: " .. message.sender .. " - " .. message.date
-            self.terminal:setContent(text)
-        end,
-
-        onKeyPress = function(self, key)
-            if key == CONST.KEYS.LEFT then
-                self.currentMessageIndex = math.max(1, self.currentMessageIndex - 1)
-                self:showCurrentMessage()
-                return true
-            elseif key == CONST.KEYS.RIGHT then
-                self.currentMessageIndex = math.min(#self.messages, self.currentMessageIndex + 1)
-                self:showCurrentMessage()
-                return true
-            end
-            return false
-        end,
-
-        render = function(self)
-            self.terminal:renderTitle("ADMIN BROADCASTS")
-
-            if #self.messages == 0 then
-                self.terminal:renderText("NO BROADCASTS AVAILABLE")
-                return
-            end
-
-            local message = self.messages[self.currentMessageIndex]
-            self.terminal:renderText(message.title ..
-                "\n\n" .. message.content .. "\n\nFrom: " .. message.sender .. " - " .. message.date)
-
-            local paginationText = string.format("< %d/%d >", self.currentMessageIndex, #self.messages)
-            local textWidth = getTextManager():MeasureStringX(CONST.FONT.CODE, paginationText)
-            local x = self.terminal.displayX + (self.terminal.displayWidth - textWidth) / 2
-            local y = self.terminal.footerAreaY - self.terminal.lineHeight
-
-            self.terminal:drawText(paginationText, x, y,
-                CONST.COLORS.TEXT_DIM.r,
-                CONST.COLORS.TEXT_DIM.g,
-                CONST.COLORS.TEXT_DIM.b,
-                CONST.COLORS.TEXT_DIM.a,
-                CONST.FONT.CODE
-            )
-
-            self.terminal:renderFooter("← PREV | NEXT → | BACKSPACE - BACK")
-        end,
-
-        sendBroadcast = function(self, title, content, sender)
-            if not isAdmin() and not Globals.isDebug then
-                return false
-            end
-
-            table.insert(self.messages, {
-                title = title,
-                content = content,
-                sender = sender or "SYSTEM",
-                date = getCurrentFormattedDate()
-            })
-
-            return true
-        end
-    })
-
     self:loadModule("Help", {
         moduleSounds = {},
 
@@ -1528,25 +1433,6 @@ function SCRAP_Terminal.API.addLoreMessage(title, content, date)
             SCRAP_Terminal._pendingLoreMessages = {}
         end
         table.insert(SCRAP_Terminal._pendingLoreMessages, { title = title, content = content, date = date })
-    end
-end
-
----Sends an admin broadcast message
----@param title string Message title
----@param content string Message content
----@param sender string|nil Optional sender name (defaults to "SYSTEM")
----@return boolean Success
-function SCRAP_Terminal.API.sendAdminBroadcast(title, content, sender)
-    if not isAdmin() and not Globals.isDebug then return false end
-
-    if SCRAP_Terminal.instance and SCRAP_Terminal.instance.activeModules["Admin Broadcast"] then
-        return SCRAP_Terminal.instance.activeModules["Admin Broadcast"]:sendBroadcast(title, content, sender)
-    else
-        if not SCRAP_Terminal._pendingBroadcasts then
-            SCRAP_Terminal._pendingBroadcasts = {}
-        end
-        table.insert(SCRAP_Terminal._pendingBroadcasts, { title = title, content = content, sender = sender })
-        return true
     end
 end
 

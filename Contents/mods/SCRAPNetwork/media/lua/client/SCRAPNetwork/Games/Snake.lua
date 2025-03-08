@@ -1,247 +1,246 @@
-local SCRAP_Terminal = require("SCRAPNetwork/ScrapOS_Terminal")
+local Constants = require("SCRAPNetwork/Games/Constants")
 local TerminalSounds = require("SCRAPNetwork/ScrapOS_TerminalSoundsManager")
 
-local Constants = require("SCRAPNetwork/Games/Constants")
-local GamesModule = require("SCRAPNetwork/Games/Module")
+local SnakeGame = {}
 
+local GAME_INFO = {
+    id = "snake",
+    name = "Snake",
+    description = "Control the snake to eat food and grow longer, but don't hit yourself or the walls!"
+}
 
-table.insert(GamesModule.GAMES,
-    {
-        name = "Snake",
-        description = "Navigate the snake to eat food and grow without hitting walls or yourself.",
-        activate = function(self) self:activateSnake() end,
-        preview = function(self, x, y, width, height, terminal)
-            local previewOffsetX = x + 5
-            local previewOffsetY = y + 5
-            local previewWidth = width - 10
-            local previewHeight = height - 10
+local rand = newrandom()
 
-            terminal:drawRect(
-                previewOffsetX, previewOffsetY,
-                previewWidth, previewHeight,
-                Constants.SNAKE_CONST.COLORS.BACKGROUND.a,
-                Constants.SNAKE_CONST.COLORS.BACKGROUND.r,
-                Constants.SNAKE_CONST.COLORS.BACKGROUND.g,
-                Constants.SNAKE_CONST.COLORS.BACKGROUND.b
-            )
-
-            local cellWidth = previewWidth / 15
-            local cellHeight = previewHeight / 8
-
-            local snakeSegments = {
-                { x = 8, y = 4 },
-                { x = 7, y = 4 },
-                { x = 6, y = 4 },
-                { x = 5, y = 4 },
-                { x = 4, y = 4 }
-            }
-
-            for i, segment in ipairs(snakeSegments) do
-                local segX = previewOffsetX + segment.x * cellWidth
-                local segY = previewOffsetY + segment.y * cellHeight
-
-                local r, g, b = Constants.SNAKE_CONST.COLORS.SNAKE.r, Constants.SNAKE_CONST.COLORS.SNAKE.g,
-                    Constants.SNAKE_CONST.COLORS.SNAKE.b
-                if i == 1 then
-                    r = math.min(1, r + 0.2)
-                    g = math.min(1, g + 0.2)
-                    b = math.min(1, b + 0.2)
-                end
-
-                terminal:drawRect(
-                    segX, segY,
-                    cellWidth - 1, cellHeight - 1,
-                    Constants.SNAKE_CONST.COLORS.SNAKE.a, r, g, b
-                )
-            end
-
-            terminal:drawRect(
-                previewOffsetX + 10 * cellWidth, previewOffsetY + 4 * cellHeight,
-                cellWidth - 1, cellHeight - 1,
-                Constants.SNAKE_CONST.COLORS.FOOD.a,
-                Constants.SNAKE_CONST.COLORS.FOOD.r,
-                Constants.SNAKE_CONST.COLORS.FOOD.g,
-                Constants.SNAKE_CONST.COLORS.FOOD.b
-            )
-        end
-    }
-)
-
-
-----------------------
--- SNAKE GAME CODE --
-----------------------
-local snakeGame = {
-    snake = {},
-    direction = Constants.SNAKE_CONST.DIRECTIONS.RIGHT,
-    nextDirection = Constants.SNAKE_CONST.DIRECTIONS.RIGHT,
+SnakeGame.gameState = {
+    snake = table.newarray(),
+    direction = nil,
+    nextDirection = nil,
     food = { x = 0, y = 0 },
     score = 0,
+    level = 1,
     gameOver = false,
-    lastUpdateTime = 0,
+    lastMoveTime = 0,
     gameOverTime = 0,
     gridOffsetX = 0,
     gridOffsetY = 0,
     cellWidth = 0,
-    cellHeight = 0
+    cellHeight = 0,
+    growing = false
 }
 
-function GamesModule:activateSnake()
-    self.inGame = true
+function SnakeGame:resetState()
+    local snake = table.newarray() --[[@as table]]
+    local startX = math.floor(Constants.SNAKE_CONST.GRID_WIDTH / 2)
+    local startY = math.floor(Constants.SNAKE_CONST.GRID_HEIGHT / 2)
 
-    local displayWidth = self.terminal.displayWidth
-    local displayHeight = self.terminal.displayHeight
+    for i = 1, Constants.SNAKE_CONST.INITIAL_LENGTH do
+        table.insert(snake, { x = startX, y = startY + (i - 1) })
+    end
 
-    local titleHeight = self.terminal.titleAreaHeight
-    local footerHeight = self.terminal.footerAreaHeight
-    local contentHeight = self.terminal.contentAreaHeight
-
-    snakeGame.cellWidth = displayWidth / Constants.SNAKE_CONST.GRID_WIDTH
-    snakeGame.cellHeight = contentHeight / Constants.SNAKE_CONST.GRID_HEIGHT
-
-    snakeGame.gridOffsetX = self.terminal.displayX
-    snakeGame.gridOffsetY = self.terminal.contentAreaY
-
-    snakeGame.snake = {
-        { x = 5, y = 7 },
-        { x = 4, y = 7 },
-        { x = 3, y = 7 }
+    self.gameState = {
+        snake = snake,
+        direction = Constants.SNAKE_CONST.DIRECTIONS.UP,
+        nextDirection = Constants.SNAKE_CONST.DIRECTIONS.UP,
+        food = { x = 0, y = 0 },
+        score = 0,
+        level = 1,
+        gameOver = false,
+        lastMoveTime = getTimeInMillis(),
+        gameOverTime = 0,
+        gridOffsetX = 0,
+        gridOffsetY = 0,
+        cellWidth = 0,
+        cellHeight = 0,
+        growing = false
     }
 
-    snakeGame.direction = Constants.SNAKE_CONST.DIRECTIONS.RIGHT
-    snakeGame.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.RIGHT
-    snakeGame.score = 0
-    snakeGame.gameOver = false
-    snakeGame.lastUpdateTime = getTimeInMillis()
-
-    self:placeFood()
-
-    self.terminal:playRandomKeySound()
+    self:generateFood()
 end
 
-function GamesModule:placeFood()
-    local grid = {}
+function SnakeGame:activate(gamesModule)
+    self.gamesModule = gamesModule
+    self.terminal = gamesModule.terminal
 
-    for _, segment in ipairs(snakeGame.snake) do
-        local key = segment.x .. "," .. segment.y
-        grid[key] = true
-    end
+    self:resetState()
 
-    local availablePositions = {}
-    for x = 0, Constants.SNAKE_CONST.GRID_WIDTH - 1 do
-        for y = 0, Constants.SNAKE_CONST.GRID_HEIGHT - 1 do
-            local key = x .. "," .. y
-            if not grid[key] then
-                table.insert(availablePositions, { x = x, y = y })
-            end
-        end
-    end
+    local displayWidth = self.terminal.displayWidth
+    local contentHeight = self.terminal.contentAreaHeight
 
-    if #availablePositions > 0 then
-        local position = availablePositions[ZombRand(1, #availablePositions + 1)]
-        snakeGame.food = position
-    end
+    local maxGridWidth = displayWidth * 0.75
+    local maxCellWidthSize = math.floor(maxGridWidth / Constants.SNAKE_CONST.GRID_WIDTH)
+    local maxCellHeightSize = math.floor(contentHeight / Constants.SNAKE_CONST.GRID_HEIGHT)
+
+    local cellSize = math.min(maxCellWidthSize, maxCellHeightSize)
+
+    self.gameState.cellWidth = cellSize
+    self.gameState.cellHeight = cellSize
+
+    local totalGridWidth = cellSize * Constants.SNAKE_CONST.GRID_WIDTH
+    local totalGridHeight = cellSize * Constants.SNAKE_CONST.GRID_HEIGHT
+
+    self.gameState.gridOffsetX = self.terminal.displayX + (displayWidth - totalGridWidth) / 2
+    self.gameState.gridOffsetY = self.terminal.contentAreaY + (contentHeight - totalGridHeight) / 2
 end
 
-function GamesModule:updateSnake()
-    local currentTime = getTimeInMillis()
-
-    if snakeGame.gameOver then
-        if currentTime - snakeGame.gameOverTime >= Constants.SNAKE_CONST.GAME_OVER_DELAY then
-            self:onActivate()
-        end
-        return
-    end
-
-    if currentTime - snakeGame.lastUpdateTime >= Constants.SNAKE_CONST.GAME_TICK then
-        snakeGame.lastUpdateTime = currentTime
-
-        snakeGame.direction = snakeGame.nextDirection
-
-        local head = snakeGame.snake[1]
-
-        local newHead = {
-            x = head.x + snakeGame.direction.x,
-            y = head.y + snakeGame.direction.y
-        }
-
-        if newHead.x < 0 or newHead.x >= Constants.SNAKE_CONST.GRID_WIDTH or
-            newHead.y < 0 or newHead.y >= Constants.SNAKE_CONST.GRID_HEIGHT then
-            self:snakeGameOver()
-            return
-        end
-
-        for i = 1, #snakeGame.snake do
-            if snakeGame.snake[i].x == newHead.x and snakeGame.snake[i].y == newHead.y then
-                self:snakeGameOver()
-                return
-            end
-        end
-
-        table.insert(snakeGame.snake, 1, newHead)
-
-        if newHead.x == snakeGame.food.x and newHead.y == snakeGame.food.y then
-            snakeGame.score = snakeGame.score + 10
-
-            TerminalSounds.playUISound("scrap_terminal_snake_eat_food")
-
-            self:placeFood()
-        else
-            table.remove(snakeGame.snake)
-        end
-    end
+function SnakeGame:onDeactivate()
 end
 
-function GamesModule:handleSnakeKeyPress(key)
-    if snakeGame.gameOver then
-        if key == Keyboard.KEY_SPACE or key == Keyboard.KEY_BACK then
-            self:onActivate()
-            return true
-        end
-        return false
-    end
+function SnakeGame:preview(x, y, width, height, terminal, gamesModule)
+    local previewOffsetX = x + 5
+    local previewOffsetY = y + 5
+    local previewWidth = width - 10
+    local previewHeight = height - 10
 
-    if key == Keyboard.KEY_UP and snakeGame.direction.y == 0 then
-        snakeGame.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.UP
-        return true
-    elseif key == Keyboard.KEY_DOWN and snakeGame.direction.y == 0 then
-        snakeGame.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.DOWN
-        return true
-    elseif key == Keyboard.KEY_LEFT and snakeGame.direction.x == 0 then
-        snakeGame.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.LEFT
-        return true
-    elseif key == Keyboard.KEY_RIGHT and snakeGame.direction.x == 0 then
-        snakeGame.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.RIGHT
-        return true
-    elseif key == Keyboard.KEY_BACK then
-        self:onActivate()
-        return true
-    end
+    terminal:drawRect(
+        previewOffsetX, previewOffsetY,
+        previewWidth, previewHeight,
+        0.7, 0, 0.1, 0.2
+    )
 
-    return false
-end
+    local gridWidth = 10
+    local gridHeight = 8
+    local cellSize = math.min(previewWidth / gridWidth, previewHeight / gridHeight)
 
-function GamesModule:renderSnake()
-    self.terminal:renderTitle("SNAKE - SCORE: " .. snakeGame.score)
+    local gridX = previewOffsetX + (previewWidth - (gridWidth * cellSize)) / 2
+    local gridY = previewOffsetY + (previewHeight - (gridHeight * cellSize)) / 2
 
-    self.terminal:drawRect(
-        snakeGame.gridOffsetX,
-        snakeGame.gridOffsetY,
-        self.terminal.displayWidth,
-        self.terminal.contentAreaHeight,
+    terminal:drawRect(
+        gridX, gridY,
+        gridWidth * cellSize, gridHeight * cellSize,
         Constants.SNAKE_CONST.COLORS.BACKGROUND.a,
         Constants.SNAKE_CONST.COLORS.BACKGROUND.r,
         Constants.SNAKE_CONST.COLORS.BACKGROUND.g,
         Constants.SNAKE_CONST.COLORS.BACKGROUND.b
     )
 
+    terminal:drawRectBorder(
+        gridX, gridY,
+        gridWidth * cellSize, gridHeight * cellSize,
+        Constants.SNAKE_CONST.COLORS.BORDER.a,
+        Constants.SNAKE_CONST.COLORS.BORDER.r,
+        Constants.SNAKE_CONST.COLORS.BORDER.g,
+        Constants.SNAKE_CONST.COLORS.BORDER.b
+    )
+
+    local snakeSegments = {
+        { x = 5, y = 4 },
+        { x = 6, y = 4 },
+        { x = 7, y = 4 },
+        { x = 8, y = 4 },
+        { x = 8, y = 5 },
+        { x = 8, y = 6 }
+    }
+
+    for i, segment in ipairs(snakeSegments) do
+        local color = (i == 1) and Constants.SNAKE_CONST.COLORS.SNAKE_HEAD or Constants.SNAKE_CONST.COLORS.SNAKE_BODY
+
+        terminal:drawRect(
+            gridX + (segment.x - 1) * cellSize,
+            gridY + (segment.y - 1) * cellSize,
+            cellSize, cellSize,
+            color.a, color.r, color.g, color.b
+        )
+    end
+
+    terminal:drawRect(
+        gridX + 2 * cellSize,
+        gridY + 2 * cellSize,
+        cellSize, cellSize,
+        Constants.SNAKE_CONST.COLORS.FOOD.a,
+        Constants.SNAKE_CONST.COLORS.FOOD.r,
+        Constants.SNAKE_CONST.COLORS.FOOD.g,
+        Constants.SNAKE_CONST.COLORS.FOOD.b
+    )
+end
+
+function SnakeGame:onKeyPress(key, gamesModule)
+    if self.gameState.gameOver then
+        if key == Keyboard.KEY_SPACE or key == Keyboard.KEY_BACK then
+            gamesModule:onActivate()
+            return true
+        end
+        return false
+    end
+
+    if key == Keyboard.KEY_UP and self.gameState.direction ~= Constants.SNAKE_CONST.DIRECTIONS.DOWN then
+        self.gameState.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.UP
+        TerminalSounds.playUISound("scrap_terminal_snake_move")
+        return true
+    elseif key == Keyboard.KEY_DOWN and self.gameState.direction ~= Constants.SNAKE_CONST.DIRECTIONS.UP then
+        self.gameState.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.DOWN
+        TerminalSounds.playUISound("scrap_terminal_snake_move")
+        return true
+    elseif key == Keyboard.KEY_LEFT and self.gameState.direction ~= Constants.SNAKE_CONST.DIRECTIONS.RIGHT then
+        self.gameState.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.LEFT
+        TerminalSounds.playUISound("scrap_terminal_snake_move")
+        return true
+    elseif key == Keyboard.KEY_RIGHT and self.gameState.direction ~= Constants.SNAKE_CONST.DIRECTIONS.LEFT then
+        self.gameState.nextDirection = Constants.SNAKE_CONST.DIRECTIONS.RIGHT
+        TerminalSounds.playUISound("scrap_terminal_snake_move")
+        return true
+    elseif key == Keyboard.KEY_SPACE then
+        self:moveSnake()
+        self.gameState.lastMoveTime = getTimeInMillis()
+        TerminalSounds.playUISound("scrap_terminal_snake_move")
+        return true
+    elseif key == Keyboard.KEY_BACK then
+        gamesModule:onActivate()
+        return true
+    end
+    return false
+end
+
+function SnakeGame:update(gamesModule)
+    local currentTime = getTimeInMillis()
+
+    if self.gameState.gameOver then
+        if currentTime - self.gameState.gameOverTime >= Constants.SNAKE_CONST.GAME_OVER_DELAY then
+            gamesModule:onActivate()
+        end
+        return
+    end
+
+    local moveDelay = math.max(50, Constants.SNAKE_CONST.MOVE_DELAY - ((self.gameState.level - 1) * 5))
+
+    if currentTime - self.gameState.lastMoveTime >= moveDelay then
+        self:moveSnake()
+        self.gameState.lastMoveTime = currentTime
+    end
+end
+
+function SnakeGame:render(gamesModule)
+    local terminal = gamesModule.terminal
+    terminal:renderTitle("SNAKE - SCORE: " .. self.gameState.score .. " | LEVEL: " .. self.gameState.level)
+
+    terminal:drawRect(
+        self.gameState.gridOffsetX,
+        self.gameState.gridOffsetY,
+        self.gameState.cellWidth * Constants.SNAKE_CONST.GRID_WIDTH,
+        self.gameState.cellHeight * Constants.SNAKE_CONST.GRID_HEIGHT,
+        Constants.SNAKE_CONST.COLORS.BACKGROUND.a,
+        Constants.SNAKE_CONST.COLORS.BACKGROUND.r,
+        Constants.SNAKE_CONST.COLORS.BACKGROUND.g,
+        Constants.SNAKE_CONST.COLORS.BACKGROUND.b
+    )
+
+    terminal:drawRectBorder(
+        self.gameState.gridOffsetX,
+        self.gameState.gridOffsetY,
+        self.gameState.cellWidth * Constants.SNAKE_CONST.GRID_WIDTH,
+        self.gameState.cellHeight * Constants.SNAKE_CONST.GRID_HEIGHT,
+        Constants.SNAKE_CONST.COLORS.BORDER.a,
+        Constants.SNAKE_CONST.COLORS.BORDER.r,
+        Constants.SNAKE_CONST.COLORS.BORDER.g,
+        Constants.SNAKE_CONST.COLORS.BORDER.b
+    )
+
     for x = 0, Constants.SNAKE_CONST.GRID_WIDTH do
-        local xPos = snakeGame.gridOffsetX + x * snakeGame.cellWidth
-        self.terminal:drawRect(
+        local xPos = self.gameState.gridOffsetX + x * self.gameState.cellWidth
+        terminal:drawRect(
             xPos,
-            snakeGame.gridOffsetY,
+            self.gameState.gridOffsetY,
             1,
-            self.terminal.contentAreaHeight,
+            self.gameState.cellHeight * Constants.SNAKE_CONST.GRID_HEIGHT,
             Constants.SNAKE_CONST.COLORS.GRID.a,
             Constants.SNAKE_CONST.COLORS.GRID.r,
             Constants.SNAKE_CONST.COLORS.GRID.g,
@@ -250,11 +249,11 @@ function GamesModule:renderSnake()
     end
 
     for y = 0, Constants.SNAKE_CONST.GRID_HEIGHT do
-        local yPos = snakeGame.gridOffsetY + y * snakeGame.cellHeight
-        self.terminal:drawRect(
-            snakeGame.gridOffsetX,
+        local yPos = self.gameState.gridOffsetY + y * self.gameState.cellHeight
+        terminal:drawRect(
+            self.gameState.gridOffsetX,
             yPos,
-            self.terminal.displayWidth,
+            self.gameState.cellWidth * Constants.SNAKE_CONST.GRID_WIDTH,
             1,
             Constants.SNAKE_CONST.COLORS.GRID.a,
             Constants.SNAKE_CONST.COLORS.GRID.r,
@@ -263,51 +262,150 @@ function GamesModule:renderSnake()
         )
     end
 
-    local foodX = snakeGame.gridOffsetX + snakeGame.food.x * snakeGame.cellWidth
-    local foodY = snakeGame.gridOffsetY + snakeGame.food.y * snakeGame.cellHeight
-    self.terminal:drawRect(
-        foodX,
-        foodY,
-        snakeGame.cellWidth,
-        snakeGame.cellHeight,
+    for i = 1, #self.gameState.snake do
+        local segment = self.gameState.snake[i]
+        local color = (i == 1) and Constants.SNAKE_CONST.COLORS.SNAKE_HEAD or Constants.SNAKE_CONST.COLORS.SNAKE_BODY
+        local segX = self.gameState.gridOffsetX + (segment.x - 1) * self.gameState.cellWidth
+        local segY = self.gameState.gridOffsetY + (segment.y - 1) * self.gameState.cellHeight
+
+        terminal:drawRect(
+            segX, segY,
+            self.gameState.cellWidth, self.gameState.cellHeight,
+            color.a, color.r, color.g, color.b
+        )
+
+        if i == 1 then
+            local eyeSize = math.max(2, math.floor(self.gameState.cellWidth / 5))
+            local eyeOffset = math.floor(self.gameState.cellWidth / 4)
+
+            terminal:drawRect(
+                segX + eyeOffset,
+                segY + eyeOffset,
+                eyeSize, eyeSize,
+                1, 1, 1, 1
+            )
+
+            terminal:drawRect(
+                segX + self.gameState.cellWidth - eyeOffset - eyeSize,
+                segY + eyeOffset,
+                eyeSize, eyeSize,
+                1, 1, 1, 1
+            )
+        end
+    end
+
+    local foodX = self.gameState.gridOffsetX + (self.gameState.food.x - 1) * self.gameState.cellWidth
+    local foodY = self.gameState.gridOffsetY + (self.gameState.food.y - 1) * self.gameState.cellHeight
+
+    terminal:drawRect(
+        foodX, foodY,
+        self.gameState.cellWidth, self.gameState.cellHeight,
         Constants.SNAKE_CONST.COLORS.FOOD.a,
         Constants.SNAKE_CONST.COLORS.FOOD.r,
         Constants.SNAKE_CONST.COLORS.FOOD.g,
         Constants.SNAKE_CONST.COLORS.FOOD.b
     )
 
-    for i, segment in ipairs(snakeGame.snake) do
-        local segmentX = snakeGame.gridOffsetX + segment.x * snakeGame.cellWidth
-        local segmentY = snakeGame.gridOffsetY + segment.y * snakeGame.cellHeight
+    local circlePadding = math.floor(self.gameState.cellWidth / 6)
+    local circleSize = self.gameState.cellWidth - (circlePadding * 2)
 
-        local r, g, b, a = Constants.SNAKE_CONST.COLORS.SNAKE.r, Constants.SNAKE_CONST.COLORS.SNAKE.g,
-            Constants.SNAKE_CONST.COLORS.SNAKE.b,
-            Constants.SNAKE_CONST.COLORS.SNAKE.a
-        if i == 1 then
-            r = math.min(1, r + 0.2)
-            g = math.min(1, g + 0.2)
-            b = math.min(1, b + 0.2)
-        end
+    terminal:drawRectBorder(
+        foodX + circlePadding,
+        foodY + circlePadding,
+        circleSize, circleSize,
+        1, 1, 1, 1
+    )
 
-        self.terminal:drawRect(
-            segmentX,
-            segmentY,
-            snakeGame.cellWidth,
-            snakeGame.cellHeight,
-            a, r, g, b
+    if self.gameState.gameOver then
+        local gameOverText = "GAME OVER"
+        local textWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.LARGE, gameOverText)
+        local textX = self.gameState.gridOffsetX +
+            (self.gameState.cellWidth * Constants.SNAKE_CONST.GRID_WIDTH - textWidth) / 2
+        local textY = self.gameState.gridOffsetY +
+            (self.gameState.cellHeight * Constants.SNAKE_CONST.GRID_HEIGHT / 2)
+
+        terminal:drawText(
+            gameOverText, textX, textY,
+            1, 1, 0.3, 0.3,
+            Constants.UI_CONST.FONT.LARGE
         )
-    end
 
-    if snakeGame.gameOver then
-        self.terminal:renderFooter("GAME OVER! SCORE: " .. snakeGame.score .. " | PRESS SPACE OR BACKSPACE TO CONTINUE")
+        terminal:renderFooter("GAME OVER! | PRESS SPACE OR BACKSPACE TO CONTINUE")
     else
-        self.terminal:renderFooter("ARROW KEYS - MOVE | BACKSPACE - QUIT GAME")
+        terminal:renderFooter("ARROWS - CHANGE DIRECTION | SPACE - BOOST | BACKSPACE - QUIT")
     end
 end
 
-function GamesModule:snakeGameOver()
-    snakeGame.gameOver = true
-    snakeGame.gameOverTime = getTimeInMillis()
+function SnakeGame:moveSnake()
+    if self.gameState.gameOver then return end
 
+    self.gameState.direction = self.gameState.nextDirection
+
+    local head = self.gameState.snake[1]
+    local newHead = {
+        x = head.x + self.gameState.direction.x,
+        y = head.y + self.gameState.direction.y
+    }
+
+    if newHead.x < 1 or newHead.x > Constants.SNAKE_CONST.GRID_WIDTH or
+        newHead.y < 1 or newHead.y > Constants.SNAKE_CONST.GRID_HEIGHT then
+        self:gameOver()
+        return
+    end
+
+    for i = 1, #self.gameState.snake do
+        local segment = self.gameState.snake[i]
+        if newHead.x == segment.x and newHead.y == segment.y then
+            self:gameOver()
+            return
+        end
+    end
+
+    if newHead.x == self.gameState.food.x and newHead.y == self.gameState.food.y then
+        self.gameState.growing = true
+        self.gameState.score = self.gameState.score + Constants.SNAKE_CONST.FOOD_POINTS * self.gameState.level
+        self.gameState.level = math.floor(self.gameState.score / 100) + 1
+        self:generateFood()
+        TerminalSounds.playUISound("scrap_terminal_snake_eat_food")
+    end
+
+    table.insert(self.gameState.snake, 1, newHead)
+
+    if not self.gameState.growing then
+        table.remove(self.gameState.snake)
+    else
+        self.gameState.growing = false
+    end
+end
+
+function SnakeGame:generateFood()
+    local valid = false
+    local newFood = { x = 0, y = 0 }
+
+    while not valid do
+        newFood.x = rand:random(1, Constants.SNAKE_CONST.GRID_WIDTH)
+        newFood.y = rand:random(1, Constants.SNAKE_CONST.GRID_HEIGHT)
+
+        valid = true
+        for i = 1, #self.gameState.snake do
+            local segment = self.gameState.snake[i]
+            if newFood.x == segment.x and newFood.y == segment.y then
+                valid = false
+                break
+            end
+        end
+    end
+
+    self.gameState.food = newFood
+end
+
+function SnakeGame:gameOver()
+    self.gameState.gameOver = true
+    self.gameState.gameOverTime = getTimeInMillis()
     TerminalSounds.playUISound("scrap_terminal_snake_gameover")
 end
+
+local GamesModule = require("SCRAPNetwork/Games/Module")
+GamesModule.registerGame(GAME_INFO, SnakeGame)
+
+return SnakeGame

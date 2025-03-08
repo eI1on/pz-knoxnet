@@ -5,19 +5,21 @@ local Constants = require("SCRAPNetwork/Games/Constants")
 
 local GamesModule = {}
 
-GamesModule.GAMES = {}
+GamesModule.GAMES = table.newarray() --[[@as table]]
+GamesModule.registeredGames = {}
 
 function GamesModule:init(terminal)
     self.terminal = terminal
     self.currentGameIndex = 0
     self.inGame = false
     self.selectedTile = 1
-    self.tiles = {}
+    self.tiles = table.newarray() --[[@as table]]
     self.backButton = nil
     self.updateTileLayout = true
     self.scrollOffset = 0
     self.maxScrollOffset = 0
     self.baseTileHeight = 0
+    self.currentGame = nil
 end
 
 function GamesModule:onActivate()
@@ -26,11 +28,16 @@ function GamesModule:onActivate()
     self.selectedTile = 1
     self.scrollOffset = 0
     self.inGame = false
+    self.currentGame = nil
     self.terminal:playRandomKeySound()
 end
 
 function GamesModule:onDeactivate()
     self.inGame = false
+    if self.currentGame and self.currentGame.onDeactivate then
+        self.currentGame:onDeactivate()
+    end
+    self.currentGame = nil
 end
 
 function GamesModule:onClose()
@@ -38,7 +45,7 @@ function GamesModule:onClose()
 end
 
 function GamesModule:calculateTileLayout()
-    self.tiles = {}
+    self.tiles = table.newarray() --[[@as table]]
 
     local displayWidth = self.terminal.displayWidth
     local contentHeight = self.terminal.contentAreaHeight
@@ -74,7 +81,8 @@ function GamesModule:calculateTileLayout()
         action = function() self.terminal:changeState("mainMenu") end
     }
 
-    for i, game in ipairs(GamesModule.GAMES) do
+    for i = 1, #GamesModule.GAMES do
+        local game = GamesModule.GAMES[i]
         local row = math.floor((i - 1) / tilesPerRow)
         local col = (i - 1) % tilesPerRow
 
@@ -99,11 +107,29 @@ end
 function GamesModule:onMouseUp(x, y)
     if not self.inGame and self.selectedTile <= #GamesModule.GAMES then
         if self.lastClickTime and getTimeInMillis() - self.lastClickTime < 500 then
-            self.currentGameIndex = self.selectedTile
-            GamesModule.GAMES[self.selectedTile].activate(self)
+            self:activateGame(self.selectedTile)
             return true
         end
         self.lastClickTime = getTimeInMillis()
+    end
+    return false
+end
+
+function GamesModule:activateGame(gameIndex)
+    if gameIndex > 0 and gameIndex <= #GamesModule.GAMES then
+        local gameId = GamesModule.GAMES[gameIndex].id
+        local gameInstance = GamesModule.registeredGames[gameId]
+
+        if gameInstance then
+            self.currentGameIndex = gameIndex
+            self.currentGame = gameInstance
+            self.inGame = true
+
+            if self.currentGame.activate then
+                self.currentGame:activate(self)
+            end
+            return true
+        end
     end
     return false
 end
@@ -113,16 +139,10 @@ function GamesModule:update()
         self:calculateTileLayout()
     end
 
-    if not self.inGame then
-        return
-    end
+    if not self.inGame then return end
 
-    if self.currentGameIndex == 1 then
-        self:updatePacman()
-    elseif self.currentGameIndex == 2 then
-        self:updateSnake()
-    elseif self.currentGameIndex == 3 then
-        self:updateTetris()
+    if self.currentGame and self.currentGame.update then
+        self.currentGame:update(self)
     end
 end
 
@@ -183,8 +203,7 @@ function GamesModule:onKeyPress(key)
             return true
         elseif key == Keyboard.KEY_SPACE then
             if self.selectedTile <= #GamesModule.GAMES then
-                self.currentGameIndex = self.selectedTile
-                GamesModule.GAMES[self.selectedTile].activate(self)
+                self:activateGame(self.selectedTile)
             else
                 self.terminal:changeState("mainMenu")
             end
@@ -196,12 +215,13 @@ function GamesModule:onKeyPress(key)
             return true
         end
     else
-        if self.currentGameIndex == 1 then
-            return self:handlePacmanKeyPress(key)
-        elseif self.currentGameIndex == 2 then
-            return self:handleSnakeKeyPress(key)
-        elseif self.currentGameIndex == 3 then
-            return self:handleTetrisKeyPress(key)
+        if self.currentGame and self.currentGame.onKeyPress then
+            return self.currentGame:onKeyPress(key, self)
+        end
+
+        if key == Keyboard.KEY_BACK then
+            self:onActivate()
+            return true
         end
     end
 
@@ -212,12 +232,8 @@ function GamesModule:render()
     if not self.inGame then
         self:renderGameSelection()
     else
-        if self.currentGameIndex == 1 then
-            self:renderPacman()
-        elseif self.currentGameIndex == 2 then
-            self:renderSnake()
-        elseif self.currentGameIndex == 3 then
-            self:renderTetris()
+        if self.currentGame and self.currentGame.render then
+            self.currentGame:render(self)
         end
     end
 end
@@ -229,6 +245,8 @@ function GamesModule:onMouseWheel(del)
         self.scrollOffset = math.max(0, math.min(self.maxScrollOffset, newOffset))
         self:update()
         return true
+    elseif self.currentGame and self.currentGame.onMouseWheel then
+        return self.currentGame:onMouseWheel(del, self)
     end
     return false
 end
@@ -255,7 +273,8 @@ function GamesModule:renderGameSelection()
     )
     local firstVisibleRow = self.scrollOffset
     local lastVisibleRow = firstVisibleRow + Constants.UI_CONST.VISIBLE_ROWS - 1
-    for i, tile in ipairs(self.tiles) do
+    for i = 1, #self.tiles do
+        local tile = self.tiles[i]
         if tile.row >= firstVisibleRow and tile.row <= lastVisibleRow then
             local isSelected = (i == self.selectedTile)
             local rowsFromTop = tile.row - firstVisibleRow
@@ -287,25 +306,28 @@ function GamesModule:renderGameSelection()
             local descWidth = tile.width - 2 * Constants.UI_CONST.TILE_PADDING
             local descLines = self:wrapText(descText, descWidth, Constants.UI_CONST.FONT.SMALL)
 
-            for j, line in ipairs(descLines) do
-                if j <= 3 then
-                    local lineWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.SMALL, line)
-                    local lineX = tile.x + (tile.width - lineWidth) / 2
-                    local lineY = descY + (j - 1) * 15
+            for j = 1, #descLines do
+                local line = descLines[j]
+                local lineWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.SMALL, line)
+                local lineX = tile.x + (tile.width - lineWidth) / 2
+                local lineY = descY + (j - 1) * 15
 
-                    self.terminal:drawText(
-                        line, lineX, lineY,
-                        textColor.r * 0.8, textColor.g * 0.8, textColor.b * 0.8, textColor.a * 0.9,
-                        Constants.UI_CONST.FONT.SMALL
-                    )
-                end
+                self.terminal:drawText(
+                    line, lineX, lineY,
+                    textColor.r * 0.8, textColor.g * 0.8, textColor.b * 0.8, textColor.a * 0.9,
+                    Constants.UI_CONST.FONT.SMALL
+                )
             end
 
             local previewY = descY + Constants.UI_CONST.DESCRIPTION_HEIGHT
             local previewX = tile.x + Constants.UI_CONST.TILE_PADDING
             local previewWidth = tile.width - 2 * Constants.UI_CONST.TILE_PADDING
 
-            tile.game.preview(self, previewX, previewY, previewWidth, Constants.UI_CONST.PREVIEW_HEIGHT, self.terminal)
+            local gameInstance = GamesModule.registeredGames[tile.game.id]
+            if gameInstance and gameInstance.preview then
+                gameInstance:preview(previewX, previewY, previewWidth, Constants.UI_CONST.PREVIEW_HEIGHT, self.terminal,
+                    self)
+            end
         end
     end
 
@@ -344,7 +366,7 @@ function GamesModule:renderGameSelection()
         end
 
         if self.scrollOffset > 0 then
-            local arrowText = "▲"
+            local arrowText = "^"
             local arrowWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.CODE, arrowText)
             self.terminal:drawText(
                 arrowText,
@@ -356,7 +378,7 @@ function GamesModule:renderGameSelection()
         end
 
         if self.scrollOffset < self.maxScrollOffset then
-            local arrowText = "▼"
+            local arrowText = "V"
             local arrowWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.CODE, arrowText)
             self.terminal:drawText(
                 arrowText,
@@ -424,7 +446,8 @@ function GamesModule:onMouseDown(x, y)
         local firstVisibleRow = self.scrollOffset
         local lastVisibleRow = firstVisibleRow + Constants.UI_CONST.VISIBLE_ROWS - 1
 
-        for i, tile in ipairs(self.tiles) do
+        for i = 1, #self.tiles do
+            local tile = self.tiles[i]
             if tile.row >= firstVisibleRow and tile.row <= lastVisibleRow then
                 local yOffset = (tile.row - firstVisibleRow) * self.baseTileHeight
                 local visibleY = tile.baseY + yOffset
@@ -448,14 +471,18 @@ function GamesModule:onMouseDown(x, y)
             end
             return true
         end
+    elseif self.currentGame and self.currentGame.onMouseDown then
+        return self.currentGame:onMouseDown(x, y, self)
     end
 
     return false
 end
 
+
+
 function GamesModule:wrapText(text, maxWidth, font)
-    local lines = {}
-    local words = {}
+    local lines = table.newarray() --[[@as table]]
+    local words = table.newarray() --[[@as table]]
 
     for word in text:gmatch("%S+") do
         table.insert(words, word)
@@ -464,7 +491,8 @@ function GamesModule:wrapText(text, maxWidth, font)
     local currentLine = ""
     local currentWidth = 0
 
-    for i, word in ipairs(words) do
+    for i = 1, #words do
+        local word = words[i]
         local wordWidth = getTextManager():MeasureStringX(font, word)
         local spaceWidth = getTextManager():MeasureStringX(font, " ")
 
@@ -488,6 +516,22 @@ function GamesModule:wrapText(text, maxWidth, font)
     end
 
     return lines
+end
+
+function GamesModule.registerGame(gameInfo, gameImpl)
+    if not gameInfo or not gameInfo.id or not gameInfo.name or not gameInfo.description then return false end
+
+    local gameEntry = {
+        id = gameInfo.id,
+        name = gameInfo.name,
+        description = gameInfo.description
+    }
+
+    GamesModule.registeredGames[gameInfo.id] = gameImpl
+
+    table.insert(GamesModule.GAMES, gameEntry)
+
+    return true
 end
 
 SCRAP_Terminal.registerModule("Games", GamesModule)
