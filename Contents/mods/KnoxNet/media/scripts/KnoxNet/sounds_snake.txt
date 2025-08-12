@@ -1,0 +1,35 @@
+module Base
+{
+	sound sfx_knoxnet_snake_eat_food
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/games/snake/sfx_knoxnet_snake_eat_food.ogg, 
+            volume = 0.50, 
+        }
+	}
+	
+	sound sfx_knoxnet_snake_gameover
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/games/snake/sfx_knoxnet_snake_gameover.ogg, 
+            volume = 0.50, 
+        }
+	}
+	
+	sound sfx_knoxnet_snake_move
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/games/snake/sfx_knoxnet_snake_move.ogg, 
+            volume = 0.50, 
+        }
+	}
+}

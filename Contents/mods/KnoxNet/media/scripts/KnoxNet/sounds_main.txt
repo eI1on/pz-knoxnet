@@ -1,0 +1,80 @@
+module Base
+{
+
+	sound sfx_knoxnet_key_1
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_key_1.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_key_2
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_key_2.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+    sound sfx_knoxnet_key_3
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_key_3.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+    sound sfx_knoxnet_key_4
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_key_4.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+    sound sfx_knoxnet_poweroff
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_poweroff.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+    sound sfx_knoxnet_poweron
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/sfx_knoxnet_poweron.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+    sound amb_knoxnet_terminal_hum
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet/ui/amb_knoxnet_terminal_hum.ogg, 
+            volume = 1, 
+        }
+	}
+}

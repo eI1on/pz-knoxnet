@@ -1,6 +1,6 @@
 version=1
 id=
-title=S.C.R.A.P. Network [DEV Branch]
+title=KnoxNet Terminal [DEV Branch]
 description=
 tags=Build 41;Balance;Interface;Misc;Multiplayer
 visibility=unlisted

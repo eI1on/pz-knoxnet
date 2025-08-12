@@ -1,0 +1,6 @@
+name=KnoxNet Terminal [DEV Branch]
+id=KnoxNet_Terminal
+description=
+require=ElyonLib
+tags=Build 41,Misc,Multiplayer,Interface
+versionMin=41.0

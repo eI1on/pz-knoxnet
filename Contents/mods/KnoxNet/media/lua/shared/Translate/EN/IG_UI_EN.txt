@@ -1,0 +1,33 @@
+IGUI_EN = {
+
+    IGUI_KnoxNet_DirectiveName_Default = "Default",
+    IGUI_KnoxNet_DirectiveName_Scavenge = "Scavenge",
+
+    IGUI_KnoxNet_NewDirective = "[%1] New Directive",
+    IGUI_KnoxNet_DirectiveCreator_System = "System",
+
+    IGUI_KnoxNet_Directive_FormField_Title = "Title:",
+    IGUI_KnoxNet_Directive_FormField_Description = "Description:",
+    IGUI_KnoxNet_Directive_FormField_UseRealDate = "Use Real Date:",
+    IGUI_KnoxNet_Directive_FormField_StartDate = "Start Date:",
+    IGUI_KnoxNet_Directive_FormField_EndDate = "End Date:",
+    IGUI_KnoxNet_Directive_FormField_IsActive = "Is Active:",
+    IGUI_KnoxNet_Directive_FormField_IsCommunityGoal = "Is Community Goal:",
+    IGUI_KnoxNet_Directive_FormField_MinContrib = "Min. Contribution for Reward:",
+    IGUI_KnoxNet_Directive_FormField_TerminalSpecific = "Terminal Specific:",
+    IGUI_KnoxNet_Directive_FormField_TerminalID = "Terminal ID:",
+    IGUI_KnoxNet_Directive_FormField_GlobalLoreReward = "Global Lore Reward:",
+
+    IGUI_KnoxNet_Directive_FormField_AddIndividualItemReward = "Add Individual Item Reward",
+    IGUI_KnoxNet_Directive_FormField_IndividualItem = "Individual Item %1:",
+    IGUI_KnoxNet_Directive_FormField_IndividualItemCount = "Individual Item %1 Count:",
+
+    IGUI_KnoxNet_Directive_FormField_AddIndividualSkillReward = "Add Individual Skill Reward",
+    IGUI_KnoxNet_Directive_FormField_IndividualSkill = "Individual Skill %1:",
+    IGUI_KnoxNet_Directive_FormField_IndividualSkillXP = "Individual Skill %1 XP:",
+
+    IGUI_KnoxNet_Directive_FormField_Title = "Title:",
+    IGUI_KnoxNet_Directive_FormField_Title = "Title:",
+
+
+}

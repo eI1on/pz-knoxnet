@@ -1,7 +1,7 @@
 {
     "Lua.workspace.library": [
         "${addons}/umbrella/module/library",
-        "C:/Users/geote/ZomboidDEV/Workshop/pz-elyonlib",
+        "C:/Users/geote/ZomboidDEV/Workshop/pz-elyonlib-b41",
         "D:/SteamLibrary/steamapps/workshop/content/108600/3378285185/mods/StarlitLibrary",
     ],
     "Lua.runtime.version": "Lua 5.1",
@@ -17,5 +17,9 @@
         "io": "disable",
         "package": "disable"
     },
-    "Lua.workspace.checkThirdParty": false
+    "Lua.workspace.checkThirdParty": false,
+    "[lua]": {
+        "editor.defaultFormatter": "JohnnyMorganz.stylua",
+        "editor.formatOnSave": true
+    }
 }
