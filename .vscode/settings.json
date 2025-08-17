@@ -1,14 +1,15 @@
 {
     "Lua.workspace.library": [
-        "${addons}/umbrella/module/library",
         "C:/Users/geote/ZomboidDEV/Workshop/pz-elyonlib-b41",
         "D:/SteamLibrary/steamapps/workshop/content/108600/3378285185/mods/StarlitLibrary",
+        "${addons}/umbrella/module/library"
     ],
     "Lua.runtime.version": "Lua 5.1",
     "Lua.runtime.path": [
         "?.lua",
         "?/init.lua",
-        "server/?.lua"
+        "server/?.lua",
+        "client/?.lua"
     ],
     "Lua.completion.requireSeparator": "/",
     "Lua.workspace.preloadFileSize": 800,
@@ -21,5 +22,5 @@
     "[lua]": {
         "editor.defaultFormatter": "JohnnyMorganz.stylua",
         "editor.formatOnSave": true
-    }
+    },
 }

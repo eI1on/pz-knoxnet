@@ -1,6 +1,6 @@
 version=1
 id=
-title=KnoxNet Terminal [DEV Branch]
+title=[B41] KnoxNet Terminal [DEV Branch]
 description=
 tags=Build 41;Balance;Interface;Misc;Multiplayer
 visibility=unlisted

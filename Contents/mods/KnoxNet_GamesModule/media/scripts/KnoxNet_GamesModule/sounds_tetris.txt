@@ -1,0 +1,69 @@
+module Base
+{
+	sound sfx_knoxnet_tetris_gameover
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris_gameover.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_tetris_groundkick
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris_groundkick.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_tetris_levelup
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris_levelup.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_tetris_lineclear
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris_lineclear.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_tetris_movebrick
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris_movebrick.ogg, 
+            volume = 0.50, 
+        }
+	}
+
+	sound sfx_knoxnet_tetris
+	{
+		category = UI,
+		maxInstancesPerEmitter = 1,	
+		clip 
+        { 
+            file = media/sound/KnoxNet_GamesModule/tetris/sfx_knoxnet_tetris.ogg, 
+            volume = 0.50, 
+        }
+	}
+    
+}

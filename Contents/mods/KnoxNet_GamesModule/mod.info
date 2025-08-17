@@ -1,0 +1,6 @@
+name=[B41] KnoxNet Terminal - Games Module [DEV Branch]
+id=KnoxNet_GamesModule
+description=
+require=ElyonLib,KnoxNet_Terminal
+tags=Build 41,Misc,Multiplayer,Interface
+versionMin=41.0

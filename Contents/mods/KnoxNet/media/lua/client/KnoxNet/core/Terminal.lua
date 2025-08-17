@@ -163,7 +163,7 @@ function KnoxNet_Terminal:initCRTComponents()
 	self.footerAreaY = self.contentAreaY + self.contentAreaHeight
 	self.footerAreaHeight = TerminalConstants.LAYOUT.FOOTER_HEIGHT
 
-	local ScrollManager = require("KnoxNet/modules/directives/ui/ScrollManager")
+	local ScrollManager = require("KnoxNet/ui/ScrollManager")
 	self.scrollManager = ScrollManager:new(0, self.contentAreaHeight)
 	self.scrollManager:setAutoScroll(true)
 	self.maxVisibleLines = math.floor(self.contentAreaHeight / self.lineHeight)
