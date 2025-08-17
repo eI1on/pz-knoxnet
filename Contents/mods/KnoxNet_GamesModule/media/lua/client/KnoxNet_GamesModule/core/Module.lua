@@ -20,13 +20,33 @@ function GamesModule:init(terminal)
 	self.maxScrollOffset = 0
 	self.baseTileHeight = 0
 	self.currentGame = nil
+	self.lastClickTime = nil
+	self.lastClickTile = nil
+end
+
+function GamesModule:validateSelection()
+	if self.selectedTile < 1 then
+		self.selectedTile = 1
+	elseif self.selectedTile > #GamesModule.GAMES + 1 then
+		self.selectedTile = #GamesModule.GAMES + 1
+	end
+	if #GamesModule.GAMES == 0 then
+		self.selectedTile = 1
+	end
 end
 
 function GamesModule:onActivate()
 	self:init(self.terminal)
 	self.terminal:setTitle("GAMES ARCADE")
 	self:calculateTileLayout()
-	self.selectedTile = 1
+	
+	if #GamesModule.GAMES > 0 then
+		self.selectedTile = 1
+	else
+		self.selectedTile = #GamesModule.GAMES + 1
+	end
+	
+	self:validateSelection()
 	self.scrollOffset = 0
 	self.inGame = false
 	self.currentGame = nil
@@ -110,12 +130,49 @@ function GamesModule:calculateTileLayout()
 end
 
 function GamesModule:onMouseUp(x, y)
-	if not self.inGame and self.selectedTile <= #GamesModule.GAMES then
-		if self.lastClickTime and getTimeInMillis() - self.lastClickTime < 500 then
-			self:activateGame(self.selectedTile)
+	if not self.inGame then
+		local tilesPerRow = Constants.UI_CONST.TILES_PER_ROW
+		local firstVisibleRow = self.scrollOffset
+		local lastVisibleRow = firstVisibleRow + Constants.UI_CONST.VISIBLE_ROWS - 1
+
+		for i = 1, #self.tiles do
+			local tile = self.tiles[i]
+			if tile.row >= firstVisibleRow and tile.row <= lastVisibleRow then
+				local yOffset = (tile.row - firstVisibleRow) * self.baseTileHeight
+				local visibleY = tile.baseY + yOffset
+
+				if x >= tile.x and x <= tile.x + tile.width and y >= visibleY and y <= visibleY + tile.height then
+					if self.lastClickTime and getTimeInMillis() - self.lastClickTime < 500 and self.lastClickTile == i then
+						self:activateGame(i)
+						self.lastClickTime = nil
+						self.lastClickTile = nil
+						return true
+					else
+						self.selectedTile = i
+						self:validateSelection()
+						self.lastClickTime = getTimeInMillis()
+						self.lastClickTile = i
+						if self.terminal.playRandomKeySound then
+							self.terminal:playRandomKeySound()
+						end
+						return true
+					end
+				end
+			end
+		end
+
+		if
+			x >= self.backButton.x
+			and x <= self.backButton.x + self.backButton.width
+			and y >= self.backButton.y
+			and y <= self.backButton.y + self.backButton.height
+		then
+			self.terminal:changeState("mainMenu")
+			if self.terminal.playRandomKeySound then
+				self.terminal:playRandomKeySound()
+			end
 			return true
 		end
-		self.lastClickTime = getTimeInMillis()
 	end
 	return false
 end
@@ -160,44 +217,121 @@ function GamesModule:onKeyPress(key)
 
 		if key == Keyboard.KEY_UP then
 			if self.selectedTile > #GamesModule.GAMES then
-				local lastRowStart = math.floor((#GamesModule.GAMES - 1) / tilesPerRow) * tilesPerRow + 1
-				self.selectedTile = math.min(lastRowStart, #GamesModule.GAMES)
-				local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
-				if selectedRow < self.scrollOffset then
-					self.scrollOffset = selectedRow
+				local currentRow = self.scrollOffset
+				local gamesInCurrentRow = math.min(tilesPerRow, #GamesModule.GAMES - currentRow * tilesPerRow)
+				if gamesInCurrentRow > 0 then
+					self.selectedTile = currentRow * tilesPerRow + gamesInCurrentRow
+				else
+					self.selectedTile = #GamesModule.GAMES
 				end
-			elseif self.selectedTile > tilesPerRow then
-				self.selectedTile = self.selectedTile - tilesPerRow
-				local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
-				if selectedRow < self.scrollOffset then
-					self.scrollOffset = selectedRow
+			else
+				local currentRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+				local currentCol = (self.selectedTile - 1) % tilesPerRow
+				local targetRow = currentRow - 1
+				
+				if targetRow >= 0 then
+					local targetTile = targetRow * tilesPerRow + currentCol + 1
+					
+					if targetTile <= #GamesModule.GAMES then
+						self.selectedTile = targetTile
+						local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+						if selectedRow < self.scrollOffset then
+							self.scrollOffset = selectedRow
+						end
+					else
+						local prevRowStart = targetRow * tilesPerRow + 1
+						local prevRowEnd = math.min(prevRowStart + tilesPerRow - 1, #GamesModule.GAMES)
+						
+						if prevRowStart <= #GamesModule.GAMES then
+							local closestTile = prevRowStart
+							local minDistance = math.abs(currentCol - 0)
+							
+							for i = prevRowStart + 1, prevRowEnd do
+								local col = (i - 1) % tilesPerRow
+								local distance = math.abs(currentCol - col)
+								if distance < minDistance then
+									minDistance = distance
+									closestTile = i
+								end
+							end
+							
+							self.selectedTile = closestTile
+							local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+							if selectedRow < self.scrollOffset then
+								self.scrollOffset = selectedRow
+							end
+						end
+					end
 				end
 			end
 
+			self:validateSelection()
 			self.terminal:playRandomKeySound()
 			return true
 		elseif key == Keyboard.KEY_DOWN then
-			if self.selectedTile <= #GamesModule.GAMES - tilesPerRow then
-				self.selectedTile = self.selectedTile + tilesPerRow
-				local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
-				local bottomRow = self.scrollOffset + visibleRows - 1
+			if self.selectedTile > #GamesModule.GAMES then
+				return true
+			else
+				local currentRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+				local currentCol = (self.selectedTile - 1) % tilesPerRow
+				local targetRow = currentRow + 1
+				local targetTile = targetRow * tilesPerRow + currentCol + 1
+				
+				if targetTile <= #GamesModule.GAMES then
+					self.selectedTile = targetTile
+					local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+					local bottomRow = self.scrollOffset + visibleRows - 1
 
-				if selectedRow > bottomRow then
-					self.scrollOffset = selectedRow - visibleRows + 1
+					if selectedRow > bottomRow then
+						self.scrollOffset = selectedRow - visibleRows + 1
+					end
+				else
+					local nextRowStart = targetRow * tilesPerRow + 1
+					local nextRowEnd = math.min(nextRowStart + tilesPerRow - 1, #GamesModule.GAMES)
+					
+					if nextRowStart <= #GamesModule.GAMES then
+						local closestTile = nextRowStart
+						local minDistance = math.abs(currentCol - 0)
+						
+						for i = nextRowStart + 1, nextRowEnd do
+							local col = (i - 1) % tilesPerRow
+							local distance = math.abs(currentCol - col)
+							if distance < minDistance then
+								minDistance = distance
+								closestTile = i
+							end
+						end
+						
+						self.selectedTile = closestTile
+						local selectedRow = math.floor((self.selectedTile - 1) / tilesPerRow)
+						local bottomRow = self.scrollOffset + visibleRows - 1
+
+						if selectedRow > bottomRow then
+							self.scrollOffset = selectedRow - visibleRows + 1
+						end
+					else
+						self.selectedTile = #GamesModule.GAMES + 1
+					end
 				end
-			elseif self.selectedTile <= #GamesModule.GAMES then
-				self.selectedTile = #GamesModule.GAMES + 1
 			end
 
+			self:validateSelection()
 			self.terminal:playRandomKeySound()
 			return true
 		elseif key == Keyboard.KEY_LEFT then
 			if self.selectedTile > #GamesModule.GAMES then
-				return true
+				local currentRow = self.scrollOffset
+				local gamesInCurrentRow = math.min(tilesPerRow, #GamesModule.GAMES - currentRow * tilesPerRow)
+				if gamesInCurrentRow > 0 then
+					self.selectedTile = currentRow * tilesPerRow + gamesInCurrentRow
+				else
+					self.selectedTile = #GamesModule.GAMES
+				end
 			elseif self.selectedTile % tilesPerRow ~= 1 then
 				self.selectedTile = self.selectedTile - 1
 			end
 
+			self:validateSelection()
 			self.terminal:playRandomKeySound()
 			return true
 		elseif key == Keyboard.KEY_RIGHT then
@@ -206,6 +340,7 @@ function GamesModule:onKeyPress(key)
 			elseif self.selectedTile % tilesPerRow ~= 0 and self.selectedTile < #GamesModule.GAMES then
 				self.selectedTile = self.selectedTile + 1
 			end
+			self:validateSelection()
 			self.terminal:playRandomKeySound()
 			return true
 		elseif key == Keyboard.KEY_SPACE then
@@ -450,7 +585,7 @@ function GamesModule:renderGameSelection()
 		Constants.UI_CONST.FONT.CODE
 	)
 
-	self.terminal:renderFooter("SPACE - SELECT | ARROWS - NAVIGATE | BACKSPACE - BACK")
+	self.terminal:renderFooter("SPACE - SELECT | ARROWS - NAVIGATE | DOUBLE-CLICK - PLAY GAME | BACKSPACE - BACK")
 end
 
 function GamesModule:onMouseDown(x, y)
@@ -490,9 +625,7 @@ function GamesModule:onMouseDown(x, y)
 
 				if x >= tile.x and x <= tile.x + tile.width and y >= visibleY and y <= visibleY + tile.height then
 					self.selectedTile = i
-					if self.terminal.playRandomKeySound then
-						self.terminal:playRandomKeySound()
-					end
+					self:validateSelection()
 					return true
 				end
 			end
@@ -505,9 +638,7 @@ function GamesModule:onMouseDown(x, y)
 			and y <= self.backButton.y + self.backButton.height
 		then
 			self.selectedTile = #GamesModule.GAMES + 1
-			if self.terminal.playRandomKeySound then
-				self.terminal:playRandomKeySound()
-			end
+			self:validateSelection()
 			return true
 		end
 	elseif self.currentGame and self.currentGame.onMouseDown then

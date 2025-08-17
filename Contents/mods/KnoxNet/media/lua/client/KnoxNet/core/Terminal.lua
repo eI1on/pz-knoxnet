@@ -1505,6 +1505,24 @@ function KnoxNet_Terminal:onMouseDown(x, y)
 	return false
 end
 
+---Handles mouse down events
+---@param x number Mouse X coordinate
+---@param y number Mouse Y coordinate
+---@return boolean
+function KnoxNet_Terminal:onMouseUp(x, y)
+	ISPanel.onMouseUp(self, x, y)
+
+	if self.currentState ~= "powerOff" then
+		if self.currentState == "module" then
+			local module = self.activeModules[self.currentModule]
+			if module and module.onMouseUp then
+				if module:onMouseUp(x, y) then
+					return true
+				end
+			end
+		end
+	end
+end
 ---Handles mouse wheel events
 ---@param del number Scroll delta
 ---@return boolean
