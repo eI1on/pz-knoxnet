@@ -168,6 +168,16 @@ function KnoxNet_Terminal:initCRTComponents()
 	self.scrollManager:setAutoScroll(true)
 	self.maxVisibleLines = math.floor(self.contentAreaHeight / self.lineHeight)
 
+	self.footerScrollOffset = 0
+	self.footerScrollSpeed = 1.2
+	self.lastFooterScrollUpdate = 0
+	self.footerScrollDelay = 16
+	self.footerScrollEnabled = true
+	self.footerScrollSpeedLevel = 2
+	self.footerScrollPauseTime = 2000
+	self.footerScrollState = "scrolling" -- states: "scrolling", "paused"
+	self.footerScrollPauseStart = 0
+
 	self.crtFlicker = 0
 	self.crtIntensity = 1.0
 	self.lastRenderTime = 0
@@ -290,7 +300,7 @@ function KnoxNet_Terminal:initStates()
 					self:renderText(self.visibleText)
 
 					if self.bootInitComplete then
-						self:renderFooter("PRESS SPACE TO CONTINUE | BACKSPACE - EXIT")
+						self:renderFooter("PRESS SPACE TO CONTINUE | BACKSPACE - EXIT | UP/DOWN - SCROLL")
 					end
 				end
 
@@ -309,6 +319,18 @@ function KnoxNet_Terminal:initStates()
 				elseif key == TerminalConstants.KEYS.CLOSE then
 					self:close()
 					return true
+				elseif key == TerminalConstants.KEYS.UP then
+					if self.scrollManager and not self.showAsciiArt then
+						self.scrollManager:setAutoScroll(false)
+						self:scrollUp(self.lineHeight)
+						return true
+					end
+				elseif key == TerminalConstants.KEYS.DOWN then
+					if self.scrollManager and not self.showAsciiArt then
+						self.scrollManager:setAutoScroll(false)
+						self:scrollDown(self.lineHeight)
+						return true
+					end
 				end
 				return false
 			end,
@@ -328,7 +350,7 @@ function KnoxNet_Terminal:initStates()
 				self:renderCRTScreen()
 				self:renderTitle("KNOXNET EMERGENCY TERMINAL SYSTEM")
 				self:renderButtonGrid()
-				self:renderFooter("ARROW KEYS - NAVIGATE | SPACE - SELECT | BACKSPACE - EXIT")
+				self:renderFooter("ARROW KEYS - NAVIGATE | SPACE - SELECT | BACKSPACE - EXIT | UP/DOWN - SCROLL")
 				self:renderPowerButton()
 			end,
 			onKeyPress = function(self, key)
@@ -341,22 +363,38 @@ function KnoxNet_Terminal:initStates()
 				local currentCol = (self.selectedButton - 1) % cols + 1
 
 				if key == TerminalConstants.KEYS.UP then
-					local newRow = math.max(1, currentRow - 1)
-					self.selectedButton = (newRow - 1) * cols + currentCol
-					if self.selectedButton > #buttons then
-						self.selectedButton = self.selectedButton - cols
+					if currentRow == 1 then
+						if self.scrollManager then
+							self.scrollManager:setAutoScroll(false)
+							self:scrollUp(self.lineHeight)
+							return true
+						end
+					else
+						local newRow = math.max(1, currentRow - 1)
+						self.selectedButton = (newRow - 1) * cols + currentCol
+						if self.selectedButton > #buttons then
+							self.selectedButton = self.selectedButton - cols
+						end
+						if self.selectedButton < 1 then
+							self.selectedButton = 1
+						end
+						return true
 					end
-					if self.selectedButton < 1 then
-						self.selectedButton = 1
-					end
-					return true
 				elseif key == TerminalConstants.KEYS.DOWN then
-					local newRow = math.min(rows, currentRow + 1)
-					self.selectedButton = (newRow - 1) * cols + currentCol
-					if self.selectedButton > #buttons then
-						self.selectedButton = #buttons
+					if currentRow == rows then
+						if self.scrollManager then
+							self.scrollManager:setAutoScroll(false)
+							self:scrollDown(self.lineHeight)
+							return true
+						end
+					else
+						local newRow = math.min(rows, currentRow + 1)
+						self.selectedButton = (newRow - 1) * cols + currentCol
+						if self.selectedButton > #buttons then
+							self.selectedButton = #buttons
+						end
+						return true
 					end
-					return true
 				elseif key == TerminalConstants.KEYS.LEFT then
 					local newCol = math.max(1, currentCol - 1)
 					self.selectedButton = (currentRow - 1) * cols + newCol
@@ -401,7 +439,7 @@ function KnoxNet_Terminal:initStates()
 				else
 					self:renderTitle(self.currentModule or "UNKNOWN MODULE")
 					self:renderText("MODULE DATA UNAVAILABLE")
-					self:renderFooter("BACKSPACE - BACK TO MAIN MENU")
+					self:renderFooter("BACKSPACE - BACK TO MAIN MENU | UP/DOWN - SCROLL")
 				end
 				self:renderPowerButton()
 			end,
@@ -413,7 +451,21 @@ function KnoxNet_Terminal:initStates()
 					end
 				end
 
-				if key == TerminalConstants.KEYS.CLOSE then
+				if key == TerminalConstants.KEYS.UP then
+					if self.scrollManager then
+						self.scrollManager:setAutoScroll(false)
+						self:scrollUp(self.lineHeight)
+						self:playRandomKeySound()
+						return true
+					end
+				elseif key == TerminalConstants.KEYS.DOWN then
+					if self.scrollManager then
+						self.scrollManager:setAutoScroll(false)
+						self:scrollDown(self.lineHeight)
+						self:playRandomKeySound()
+						return true
+					end
+				elseif key == TerminalConstants.KEYS.CLOSE then
 					self:changeState("mainMenu")
 					return true
 				end
@@ -445,7 +497,7 @@ function KnoxNet_Terminal:initStates()
 				self:renderCRTScreen()
 				self:renderTitle("TERMINAL CONFIGURATION")
 				self:renderButtonGrid()
-				self:renderFooter("ARROW KEYS - NAVIGATE | SPACE - SELECT | BACKSPACE - BACK")
+				self:renderFooter("ARROW KEYS - NAVIGATE | SPACE - SELECT | BACKSPACE - BACK | UP/DOWN - SCROLL")
 				self:renderPowerButton()
 			end,
 			onKeyPress = function(self, key)
@@ -461,22 +513,38 @@ function KnoxNet_Terminal:initStates()
 					self:changeState("mainMenu")
 					return true
 				elseif key == TerminalConstants.KEYS.UP then
-					local newRow = math.max(1, currentRow - 1)
-					self.selectedButton = (newRow - 1) * cols + currentCol
-					if self.selectedButton > #buttons then
-						self.selectedButton = self.selectedButton - cols
+					if currentRow == 1 then
+						if self.scrollManager then
+							self.scrollManager:setAutoScroll(false)
+							self:scrollUp(self.lineHeight)
+							return true
+						end
+					else
+						local newRow = math.max(1, currentRow - 1)
+						self.selectedButton = (newRow - 1) * cols + currentCol
+						if self.selectedButton > #buttons then
+							self.selectedButton = self.selectedButton - cols
+						end
+						if self.selectedButton < 1 then
+							self.selectedButton = 1
+						end
+						return true
 					end
-					if self.selectedButton < 1 then
-						self.selectedButton = 1
-					end
-					return true
 				elseif key == TerminalConstants.KEYS.DOWN then
-					local newRow = math.min(rows, currentRow + 1)
-					self.selectedButton = (newRow - 1) * cols + currentCol
-					if self.selectedButton > #buttons then
-						self.selectedButton = #buttons
+					if currentRow == rows then
+						if self.scrollManager then
+							self.scrollManager:setAutoScroll(false)
+							self:scrollDown(self.lineHeight)
+							return true
+						end
+					else
+						local newRow = math.min(rows, currentRow + 1)
+						self.selectedButton = (newRow - 1) * cols + currentCol
+						if self.selectedButton > #buttons then
+							self.selectedButton = #buttons
+						end
+						return true
 					end
-					return true
 				elseif key == TerminalConstants.KEYS.LEFT then
 					local newCol = math.max(1, currentCol - 1)
 					self.selectedButton = (currentRow - 1) * cols + newCol
@@ -498,6 +566,14 @@ function KnoxNet_Terminal:initStates()
 	}
 
 	self.currentState = nil
+end
+
+---Resets the footer scroll position
+function KnoxNet_Terminal:resetFooterScroll()
+	self.footerScrollOffset = 0
+	self.lastFooterScrollUpdate = 0
+	self.footerScrollState = "scrolling"
+	self.footerScrollPauseStart = 0
 end
 
 function KnoxNet_Terminal:renderPowerOffScreen()
@@ -625,6 +701,8 @@ function KnoxNet_Terminal:changeState(stateName, ...)
 		self.buttons = {}
 		self.selectedButton = 1
 
+		self:resetFooterScroll()
+
 		if self.states[stateName].enter then
 			self.states[stateName].enter(self, ...)
 		end
@@ -668,7 +746,7 @@ NAVIGATION:
  
 SCROLLING:
     Mouse Wheel - Scroll content
-    Up/Down     - Keyboard scrolling
+    Up/Down     - Keyboard scrolling (Arrow Keys)
  
 AVAILABLE MODULES:
     Lore Database  - Historical records
@@ -682,7 +760,7 @@ ADMIN FEATURES:
 Contact local KnoxNet administrator for support
 			            ]])
 
-			self.terminal:renderFooter("BACKSPACE - BACK TO MAIN MENU")
+			self.terminal:renderFooter("BACKSPACE - BACK TO MAIN MENU | UP/DOWN - SCROLL")
 		end,
 	})
 end
@@ -799,6 +877,41 @@ function KnoxNet_Terminal:createSettingsButtons()
 				or self.screenBrightness == 0.7 and 0.9
 				or 1
 			self.textBrightnessMultiplier = self.screenBrightness
+			self:createSettingsButtons()
+		end,
+	})
+
+	table.insert(self.buttons, {
+		text = "Footer Scrolling: " .. (self.footerScrollEnabled and "Enabled" or "Disabled"),
+		action = function()
+			self.footerScrollEnabled = not self.footerScrollEnabled
+			if not self.footerScrollEnabled then
+				self.footerScrollOffset = 0
+			end
+			self:createSettingsButtons()
+		end,
+	})
+
+	self.footerScrollSpeedLevel = self.footerScrollSpeedLevel or 2
+	table.insert(self.buttons, {
+		text = "Footer Speed: "
+			.. (
+				self.footerScrollSpeedLevel == 1 and "Slow"
+				or self.footerScrollSpeedLevel == 2 and "Normal"
+				or self.footerScrollSpeedLevel == 3 and "Fast"
+				or "Very Fast"
+			),
+		action = function()
+			self.footerScrollSpeedLevel = (self.footerScrollSpeedLevel % 4) + 1
+			if self.footerScrollSpeedLevel == 1 then
+				self.footerScrollSpeed = 0.6 -- Slow
+			elseif self.footerScrollSpeedLevel == 2 then
+				self.footerScrollSpeed = 1.2 -- Normal
+			elseif self.footerScrollSpeedLevel == 3 then
+				self.footerScrollSpeed = 2.0 -- Fast
+			else
+				self.footerScrollSpeed = 3.0 -- Very Fast
+			end
 			self:createSettingsButtons()
 		end,
 	})
@@ -1117,6 +1230,10 @@ end
 ---Renders the footer bar with text
 ---@param text string The footer text
 function KnoxNet_Terminal:renderFooter(text)
+	if not text then
+		return
+	end
+
 	local textX = self.displayX + self.textPaddingX
 	local textY = self.footerAreaY
 		+ (self.footerAreaHeight - getTextManager():MeasureStringY(TerminalConstants.FONT.CODE, text)) / 2
@@ -1143,16 +1260,88 @@ function KnoxNet_Terminal:renderFooter(text)
 		TerminalConstants.COLORS.FOOTER.BORDER.b * self.crtIntensity
 	)
 
-	self:drawText(
-		text,
-		textX,
-		textY,
-		TerminalConstants.COLORS.TEXT.DIM.r * self.crtIntensity,
-		TerminalConstants.COLORS.TEXT.DIM.g * self.crtIntensity,
-		TerminalConstants.COLORS.TEXT.DIM.b * self.crtIntensity,
-		TerminalConstants.COLORS.TEXT.DIM.a,
-		TerminalConstants.FONT.CODE
-	)
+	local textWidth = getTextManager():MeasureStringX(TerminalConstants.FONT.CODE, text)
+	local availableWidth = self.displayWidth - (self.textPaddingX * 2)
+
+	if textWidth <= availableWidth then
+		self:drawText(
+			text,
+			textX,
+			textY,
+			TerminalConstants.COLORS.TEXT.DIM.r * self.crtIntensity,
+			TerminalConstants.COLORS.TEXT.DIM.g * self.crtIntensity,
+			TerminalConstants.COLORS.TEXT.DIM.b * self.crtIntensity,
+			TerminalConstants.COLORS.TEXT.DIM.a,
+			TerminalConstants.FONT.CODE
+		)
+	else
+		local maxScrollOffset = textWidth - availableWidth
+
+		if self.footerScrollEnabled then
+			local currentTime = getTimeInMillis()
+			
+			if self.footerScrollState == "scrolling" then
+				if currentTime > self.lastFooterScrollUpdate + self.footerScrollDelay then
+					self.footerScrollOffset = self.footerScrollOffset + self.footerScrollSpeed
+
+					if self.footerScrollOffset >= maxScrollOffset then
+						self.footerScrollState = "paused"
+						self.footerScrollPauseStart = currentTime
+					end
+
+					self.lastFooterScrollUpdate = currentTime
+				end
+			elseif self.footerScrollState == "paused" then
+				if currentTime > self.footerScrollPauseStart + self.footerScrollPauseTime then
+					self.footerScrollState = "scrolling"
+					self.footerScrollOffset = 0
+					self.lastFooterScrollUpdate = currentTime
+				end
+			end
+		end
+
+		local visibleTextX = textX - self.footerScrollOffset
+		
+		local footerLeft = self.displayX + self.textPaddingX
+		local footerRight = self.displayX + self.displayWidth - self.textPaddingX
+		
+		local textLeft = visibleTextX
+		local textRight = visibleTextX + textWidth
+		
+		if textRight > footerLeft and textLeft < footerRight then
+			local clipLeft = math.max(footerLeft, textLeft)
+			local clipRight = math.min(footerRight, textRight)
+			
+			local visibleStartX = clipLeft - textLeft
+			local visibleEndX = clipRight - textLeft
+			
+			local startPercent = visibleStartX / textWidth
+			local endPercent = visibleEndX / textWidth
+			
+			local startChar = math.floor(startPercent * #text) + 1
+			local endChar = math.floor(endPercent * #text)
+			
+			startChar = math.max(1, startChar)
+			endChar = math.min(#text, endChar)
+			
+			local visibleText = string.sub(text, startChar, endChar)
+			
+			if #visibleText > 0 then
+				local renderX = clipLeft
+				
+				self:drawText(
+					visibleText,
+					renderX,
+					textY,
+					TerminalConstants.COLORS.TEXT.DIM.r * self.crtIntensity,
+					TerminalConstants.COLORS.TEXT.DIM.g * self.crtIntensity,
+					TerminalConstants.COLORS.TEXT.DIM.b * self.crtIntensity,
+					TerminalConstants.COLORS.TEXT.DIM.a,
+					TerminalConstants.FONT.CODE
+				)
+			end
+		end
+	end
 end
 
 function KnoxNet_Terminal:getButtonGridCols()
