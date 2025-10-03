@@ -27,6 +27,21 @@ TerminalConstants = {
 			MIN_HANDLE_HEIGHT = 30,
 			PADDING = 5,
 		},
+		-- New responsive padding system
+		RESPONSIVE = {
+			-- Base padding that scales with terminal size
+			BASE_PADDING = 12,
+			-- Minimum padding regardless of size
+			MIN_PADDING = 8,
+			-- Maximum padding regardless of size
+			MAX_PADDING = 25,
+			-- Content area padding (from edges)
+			CONTENT_EDGE_PADDING = 15,
+			-- Button spacing
+			BUTTON_SPACING = 12,
+			-- Footer/title content padding
+			HEADER_FOOTER_PADDING = 12,
+		},
 	},
 
 	FONT = {
@@ -139,6 +154,7 @@ TerminalConstants = {
 		"Sneak",
 		"Toggle Inventory",
 	},
+
 	COLOR_SCHEMES = {
 		green = {
 			name = "Classic Green",
@@ -801,5 +817,36 @@ TerminalConstants = {
 		},
 	},
 }
+
+-- Function to calculate responsive padding based on terminal size
+---@param terminalWidth number Terminal width
+---@param terminalHeight number Terminal height
+---@return table Padding values
+TerminalConstants.getResponsivePadding = function(terminalWidth, terminalHeight)
+	local baseSize = math.min(terminalWidth, terminalHeight)
+	local scaleFactor = baseSize / 800 -- Base scale factor
+
+	-- Clamp scale factor between 0.5 and 2.0
+	scaleFactor = math.max(0.5, math.min(2.0, scaleFactor))
+
+	local responsive = TerminalConstants.LAYOUT.RESPONSIVE
+	local padding = {}
+
+	-- Calculate padding values based on scale factor
+	padding.base =
+		math.max(responsive.MIN_PADDING, math.min(responsive.MAX_PADDING, responsive.BASE_PADDING * scaleFactor))
+	padding.contentEdge = math.max(
+		responsive.MIN_PADDING,
+		math.min(responsive.MAX_PADDING, responsive.CONTENT_EDGE_PADDING * scaleFactor)
+	)
+	padding.buttonSpacing =
+		math.max(responsive.MIN_PADDING, math.min(responsive.MAX_PADDING, responsive.BUTTON_SPACING * scaleFactor))
+	padding.headerFooter = math.max(
+		responsive.MIN_PADDING,
+		math.min(responsive.MAX_PADDING, responsive.HEADER_FOOTER_PADDING * scaleFactor)
+	)
+
+	return padding
+end
 
 return TerminalConstants

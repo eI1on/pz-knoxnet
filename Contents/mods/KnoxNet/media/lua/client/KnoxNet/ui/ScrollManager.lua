@@ -17,10 +17,11 @@ function ScrollManager:new(contentHeight, visibleHeight)
 	obj.scrollOffset = 0
 	obj.maxScrollOffset = math.max(0, contentHeight - visibleHeight)
 	obj.smoothScrollTarget = nil
-	obj.smoothScrollSpeed = 5
+	obj.smoothScrollSpeed = 8
 	obj.lastUpdateTime = getTimeInMillis()
 	obj.scrollListeners = {}
 	obj.autoScroll = false
+	obj.lastScrollDirection = nil
 
 	return obj
 end
@@ -63,9 +64,8 @@ function ScrollManager:scrollUp(amount)
 	amount = amount or 10
 	local oldOffset = self.scrollOffset
 	local newOffset = math.max(0, self.scrollOffset - amount)
-	self.scrollOffset = newOffset
 
-	self:notifyScrollListeners(oldOffset)
+	self:scrollTo(newOffset, true)
 end
 
 --- Scroll the content down
@@ -75,13 +75,8 @@ function ScrollManager:scrollDown(amount)
 	local oldOffset = self.scrollOffset
 	local maxOffset = math.max(0, self.contentHeight - self.visibleHeight)
 	local newOffset = math.min(maxOffset, self.scrollOffset + amount)
-	self.scrollOffset = newOffset
 
-	if self.smoothScrollTarget ~= nil and math.abs(self.smoothScrollTarget - newOffset) > amount / 2 then
-		self.smoothScrollTarget = nil
-	end
-
-	self:notifyScrollListeners(oldOffset)
+	self:scrollTo(newOffset, true)
 end
 
 --- Scroll to a specific position
@@ -106,10 +101,13 @@ end
 function ScrollManager:onMouseWheel(delta)
 	self.maxScrollOffset = math.max(0, self.contentHeight - self.visibleHeight)
 
+	local scrollMultiplier = 4
+	local scrollAmount = math.abs(delta) * scrollMultiplier
+
 	if delta > 0 then
-		self:scrollUp(delta)
+		self:scrollUp(scrollAmount)
 	else
-		self:scrollDown(math.abs(delta))
+		self:scrollDown(scrollAmount)
 	end
 end
 
@@ -190,7 +188,7 @@ function ScrollManager:update(deltaTime)
 		local diff = self.smoothScrollTarget - self.scrollOffset
 		local absDiff = math.abs(diff)
 
-		if absDiff < 1 then
+		if absDiff < 0.5 then
 			self.scrollOffset = self.smoothScrollTarget
 			self.smoothScrollTarget = nil
 			self:notifyScrollListeners(oldOffset)
@@ -202,7 +200,7 @@ function ScrollManager:update(deltaTime)
 				self.scrollOffset = self.scrollOffset - moveAmount
 			end
 
-			if math.abs(oldOffset - self.scrollOffset) > 0.5 then
+			if math.abs(oldOffset - self.scrollOffset) > 0.1 then
 				self:notifyScrollListeners(oldOffset)
 			end
 		end

@@ -1,5 +1,6 @@
 local Constants = require("KnoxNet_GamesModule/core/Constants")
 local TerminalSounds = require("KnoxNet/core/TerminalSounds")
+local SnakeMainMenu = require("KnoxNet_GamesModule/games/SnakeMainMenu")
 
 local KnoxNet_Terminal = require("KnoxNet/core/Terminal")
 
@@ -411,6 +412,10 @@ function SnakeGame:gameOver()
 	self.gameState.gameOver = true
 	self.gameState.gameOverTime = getTimeInMillis()
 	TerminalSounds.playUISound("sfx_knoxnet_snake_gameover")
+end
+
+function SnakeGame:getMainMenu()
+	return SnakeMainMenu:new(self, GAME_INFO)
 end
 
 local GamesModule = require("KnoxNet_GamesModule/core/Module")

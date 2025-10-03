@@ -5,6 +5,7 @@ local TableUtils = require("ElyonLib/TableUtils/TableUtils")
 local AudioManager = require("KnoxNet/core/AudioManager")
 local TerminalSounds = require("KnoxNet/core/TerminalSounds")
 local TerminalConstants = require("KnoxNet/core/TerminalConstants")
+local TerminalMenuManager = require("KnoxNet/ui/TerminalMenuManager")
 
 ---@class KnoxNet_Terminal : ISPanel
 ---@field instance KnoxNet_Terminal
@@ -337,9 +338,15 @@ function KnoxNet_Terminal:initStates()
 		},
 		mainMenu = {
 			enter = function(self)
-				self:createMainMenuButtons()
+				if not self.terminalMenuManager then
+					self.terminalMenuManager = TerminalMenuManager:new(self)
+				end
+				self.terminalMenuManager:activate()
 			end,
 			update = function(self)
+				if self.terminalMenuManager then
+					self.terminalMenuManager:update()
+				end
 				for _, module in pairs(self.activeModules) do
 					if module.update then
 						module:update()
@@ -348,70 +355,15 @@ function KnoxNet_Terminal:initStates()
 			end,
 			render = function(self)
 				self:renderCRTScreen()
-				self:renderTitle("KNOXNET EMERGENCY TERMINAL SYSTEM")
-				self:renderButtonGrid()
-				self:renderFooter("ARROW KEYS - NAVIGATE | SPACE - SELECT | BACKSPACE - EXIT | UP/DOWN - SCROLL")
+				if self.terminalMenuManager then
+					self.terminalMenuManager:render()
+				end
 				self:renderPowerButton()
 			end,
 			onKeyPress = function(self, key)
 				self:playRandomKeySound()
-
-				local buttons = self.buttons
-				local cols = self:getButtonGridCols()
-				local rows = math.ceil(#buttons / cols)
-				local currentRow = math.ceil(self.selectedButton / cols)
-				local currentCol = (self.selectedButton - 1) % cols + 1
-
-				if key == TerminalConstants.KEYS.UP then
-					if currentRow == 1 then
-						if self.scrollManager then
-							self.scrollManager:setAutoScroll(false)
-							self:scrollUp(self.lineHeight)
-							return true
-						end
-					else
-						local newRow = math.max(1, currentRow - 1)
-						self.selectedButton = (newRow - 1) * cols + currentCol
-						if self.selectedButton > #buttons then
-							self.selectedButton = self.selectedButton - cols
-						end
-						if self.selectedButton < 1 then
-							self.selectedButton = 1
-						end
-						return true
-					end
-				elseif key == TerminalConstants.KEYS.DOWN then
-					if currentRow == rows then
-						if self.scrollManager then
-							self.scrollManager:setAutoScroll(false)
-							self:scrollDown(self.lineHeight)
-							return true
-						end
-					else
-						local newRow = math.min(rows, currentRow + 1)
-						self.selectedButton = (newRow - 1) * cols + currentCol
-						if self.selectedButton > #buttons then
-							self.selectedButton = #buttons
-						end
-						return true
-					end
-				elseif key == TerminalConstants.KEYS.LEFT then
-					local newCol = math.max(1, currentCol - 1)
-					self.selectedButton = (currentRow - 1) * cols + newCol
-					return true
-				elseif key == TerminalConstants.KEYS.RIGHT then
-					local newCol = math.min(cols, currentCol + 1)
-					self.selectedButton = (currentRow - 1) * cols + newCol
-					if self.selectedButton > #buttons then
-						self.selectedButton = self.selectedButton - (cols - currentCol + 1)
-					end
-					return true
-				elseif key == TerminalConstants.KEYS.CONFIRM then
-					self:activateSelectedButton()
-					return true
-				elseif key == TerminalConstants.KEYS.CLOSE then
-					self:close()
-					return true
+				if self.terminalMenuManager then
+					return self.terminalMenuManager:onKeyPress(key)
 				end
 				return false
 			end,
@@ -520,7 +472,7 @@ function KnoxNet_Terminal:initStates()
 							return true
 						end
 					else
-						local newRow = math.max(1, currentRow - 1)
+						local newRow = (currentRow > 1) and (currentRow - 1) or 1
 						self.selectedButton = (newRow - 1) * cols + currentCol
 						if self.selectedButton > #buttons then
 							self.selectedButton = self.selectedButton - cols
@@ -538,7 +490,7 @@ function KnoxNet_Terminal:initStates()
 							return true
 						end
 					else
-						local newRow = math.min(rows, currentRow + 1)
+						local newRow = (rows > currentRow + 1) and (currentRow + 1) or rows
 						self.selectedButton = (newRow - 1) * cols + currentCol
 						if self.selectedButton > #buttons then
 							self.selectedButton = #buttons
@@ -546,11 +498,11 @@ function KnoxNet_Terminal:initStates()
 						return true
 					end
 				elseif key == TerminalConstants.KEYS.LEFT then
-					local newCol = math.max(1, currentCol - 1)
+					local newCol = (currentCol - 1 >= 1) and (currentCol - 1) or 1
 					self.selectedButton = (currentRow - 1) * cols + newCol
 					return true
 				elseif key == TerminalConstants.KEYS.RIGHT then
-					local newCol = math.min(cols, currentCol + 1)
+					local newCol = (cols > currentCol + 1) and (currentCol + 1) or cols
 					self.selectedButton = (currentRow - 1) * cols + newCol
 					if self.selectedButton > #buttons then
 						self.selectedButton = self.selectedButton - (cols - currentCol + 1)
@@ -577,7 +529,9 @@ function KnoxNet_Terminal:resetFooterScroll()
 end
 
 function KnoxNet_Terminal:renderPowerOffScreen()
-	local texScale = math.min(self.width / self.origTexWidth, self.height / self.origTexHeight)
+	local texScale = (self.width / self.origTexWidth < self.height / self.origTexHeight)
+			and (self.width / self.origTexWidth)
+		or (self.height / self.origTexHeight)
 	local texWidth = self.origTexWidth * texScale
 	local texHeight = self.origTexHeight * texScale
 	local texX = (self.width - texWidth) / 2
@@ -618,7 +572,9 @@ function KnoxNet_Terminal:renderPowerButton()
 
 	local sizeMultiplier = 1.0
 
-	local texScale = math.min(self.width / self.origTexWidth, self.height / self.origTexHeight)
+	local texScale = (self.width / self.origTexWidth < self.height / self.origTexHeight)
+			and (self.width / self.origTexWidth)
+		or (self.height / self.origTexHeight)
 	local texWidth = self.origTexWidth * texScale
 	local texHeight = self.origTexHeight * texScale
 	local texX = (self.width - texWidth) / 2
@@ -640,7 +596,7 @@ function KnoxNet_Terminal:renderPowerButton()
 
 	local isPowered = self.currentState ~= "powerOff"
 
-	local indicatorSize = math.min(powerButtonWidth, powerButtonHeight) * 0.8
+	local indicatorSize = (powerButtonWidth < powerButtonHeight and powerButtonWidth or powerButtonHeight) * 0.8
 	local indicatorX = powerButtonX + (powerButtonWidth - indicatorSize) / 2
 	local indicatorY = powerButtonY + (powerButtonHeight - indicatorSize) / 2
 
@@ -1047,7 +1003,9 @@ function KnoxNet_Terminal:renderCRTScreen()
 		self.crtIntensity = 1.0
 	end
 
-	local texScale = math.min(self.width / self.origTexWidth, self.height / self.origTexHeight)
+	local texScale = (self.width / self.origTexWidth < self.height / self.origTexHeight)
+			and (self.width / self.origTexWidth)
+		or (self.height / self.origTexHeight)
 	local texWidth = self.origTexWidth * texScale
 	local texHeight = self.origTexHeight * texScale
 	local texX = (self.width - texWidth) / 2
@@ -1086,15 +1044,18 @@ function KnoxNet_Terminal:renderText(text)
 
 	local scrollOffset = self.scrollManager:getScrollOffset()
 
-	local startLine = math.max(1, math.floor(scrollOffset / self.lineHeight) + 1)
-	local endLine = math.min(startLine + self.maxVisibleLines - 1, #lines)
+	local startLine = ((math.floor(scrollOffset / self.lineHeight) + 1) > 1)
+			and (math.floor(scrollOffset / self.lineHeight) + 1)
+		or 1
+	local endLine = ((startLine + self.maxVisibleLines - 1) < #lines) and (startLine + self.maxVisibleLines - 1)
+		or #lines
 
 	if self.currentState == "bootAndAscii" and self.showAsciiArt then
 		local maxWidth = 0
 		for i = 1, #lines do
 			if lines[i] then
 				local lineWidth = getTextManager():MeasureStringX(TerminalConstants.FONT.CODE, lines[i])
-				maxWidth = math.max(maxWidth, lineWidth)
+				maxWidth = (maxWidth > lineWidth) and maxWidth or lineWidth
 			end
 		end
 
@@ -1279,7 +1240,6 @@ function KnoxNet_Terminal:renderFooter(text)
 
 		if self.footerScrollEnabled then
 			local currentTime = getTimeInMillis()
-			
 			if self.footerScrollState == "scrolling" then
 				if currentTime > self.lastFooterScrollUpdate + self.footerScrollDelay then
 					self.footerScrollOffset = self.footerScrollOffset + self.footerScrollSpeed
@@ -1301,34 +1261,34 @@ function KnoxNet_Terminal:renderFooter(text)
 		end
 
 		local visibleTextX = textX - self.footerScrollOffset
-		
+
 		local footerLeft = self.displayX + self.textPaddingX
 		local footerRight = self.displayX + self.displayWidth - self.textPaddingX
-		
+
 		local textLeft = visibleTextX
 		local textRight = visibleTextX + textWidth
-		
+
 		if textRight > footerLeft and textLeft < footerRight then
-			local clipLeft = math.max(footerLeft, textLeft)
-			local clipRight = math.min(footerRight, textRight)
-			
+			local clipLeft = (footerLeft > textLeft) and footerLeft or textLeft
+			local clipRight = (footerRight < textRight) and footerRight or textRight
+
 			local visibleStartX = clipLeft - textLeft
 			local visibleEndX = clipRight - textLeft
-			
+
 			local startPercent = visibleStartX / textWidth
 			local endPercent = visibleEndX / textWidth
-			
+
 			local startChar = math.floor(startPercent * #text) + 1
 			local endChar = math.floor(endPercent * #text)
-			
-			startChar = math.max(1, startChar)
-			endChar = math.min(#text, endChar)
-			
+
+			startChar = (startChar < 1) and 1 or startChar
+			endChar = (endChar > #text) and #text or endChar
+
 			local visibleText = string.sub(text, startChar, endChar)
-			
+
 			if #visibleText > 0 then
 				local renderX = clipLeft
-				
+
 				self:drawText(
 					visibleText,
 					renderX,
@@ -1349,57 +1309,72 @@ function KnoxNet_Terminal:getButtonGridCols()
 end
 
 function KnoxNet_Terminal:renderButtonGrid()
+	-- Get responsive padding based on terminal size
+	local padding = TerminalConstants.getResponsivePadding(self.width, self.height)
+
+	-- Calculate content area with proper padding
+	local contentX = self.displayX + padding.contentEdge
+	local contentY = self.contentAreaY + padding.contentEdge
+	local contentWidth = self.displayWidth - (padding.contentEdge * 2)
+	local contentHeight = self.contentAreaHeight - (padding.contentEdge * 2)
+
 	local columns = self:getButtonGridCols()
 
-	local totalButtonWidth = self.displayWidth * 0.8
-	local buttonWidth = (totalButtonWidth - TerminalConstants.LAYOUT.MAIN_MENU.BUTTONS_PADDING) / columns
+	local totalButtonWidth = contentWidth * 0.8
+	local buttonWidth = (totalButtonWidth - padding.buttonSpacing) / columns
 	local buttonHeight = self.lineHeight * 1.5
 
-	local startX = self.displayX + (self.displayWidth - totalButtonWidth) / 2
-	local startY = self.contentAreaY + 30
+	local startX = contentX + (contentWidth - totalButtonWidth) / 2
+	local startY = contentY + padding.contentEdge
 
 	for i = 1, #self.buttons do
 		local button = self.buttons[i]
 		local col = (i - 1) % columns
 		local row = math.floor((i - 1) / columns)
 
-		local x = startX + col * (buttonWidth + TerminalConstants.LAYOUT.MAIN_MENU.BUTTONS_PADDING)
-		local y = startY + row * (buttonHeight + TerminalConstants.LAYOUT.MAIN_MENU.BUTTONS_PADDING)
+		local x = startX + col * (buttonWidth + padding.buttonSpacing)
+		local y = startY + row * (buttonHeight + padding.buttonSpacing)
 
-		local isSelected = (i == self.selectedButton)
+		-- SMART CLIPPING: Allow partial visibility for smooth scrolling, but prevent title/footer overlap
+		-- Check if button intersects with content area (allows partial visibility)
+		if y + buttonHeight > contentY and y < contentY + contentHeight then
+			local isSelected = (i == self.selectedButton)
 
-		local bgColor = isSelected and TerminalConstants.COLORS.BUTTON.SELECTED or TerminalConstants.COLORS.BUTTON.COLOR
-		local borderColor = TerminalConstants.COLORS.BUTTON.BORDER
+			local bgColor = isSelected and TerminalConstants.COLORS.BUTTON.SELECTED
+				or TerminalConstants.COLORS.BUTTON.COLOR
+			local borderColor = TerminalConstants.COLORS.BUTTON.BORDER
 
-		self:drawRect(x, y, buttonWidth, buttonHeight, bgColor.a, bgColor.r, bgColor.g, bgColor.b)
+			self:drawRect(x, y, buttonWidth, buttonHeight, bgColor.a, bgColor.r, bgColor.g, bgColor.b)
 
-		self:drawRectBorder(
-			x,
-			y,
-			buttonWidth,
-			buttonHeight,
-			borderColor.a,
-			borderColor.r * self.crtIntensity,
-			borderColor.g * self.crtIntensity,
-			borderColor.b * self.crtIntensity
-		)
+			self:drawRectBorder(
+				x,
+				y,
+				buttonWidth,
+				buttonHeight,
+				borderColor.a,
+				borderColor.r * self.crtIntensity,
+				borderColor.g * self.crtIntensity,
+				borderColor.b * self.crtIntensity
+			)
 
-		local textWidth = getTextManager():MeasureStringX(TerminalConstants.FONT.CODE, button.text)
-		local textX = x + (buttonWidth - textWidth) / 2
-		local textY = y + (buttonHeight - getTextManager():MeasureStringY(TerminalConstants.FONT.CODE, button.text)) / 2
+			local textWidth = getTextManager():MeasureStringX(TerminalConstants.FONT.CODE, button.text)
+			local textX = x + (buttonWidth - textWidth) / 2
+			local textY = y
+				+ (buttonHeight - getTextManager():MeasureStringY(TerminalConstants.FONT.CODE, button.text)) / 2
 
-		local textColor = isSelected and TerminalConstants.COLORS.TEXT.DIM or TerminalConstants.COLORS.TEXT.NORMAL
+			local textColor = isSelected and TerminalConstants.COLORS.TEXT.DIM or TerminalConstants.COLORS.TEXT.NORMAL
 
-		self:drawText(
-			button.text,
-			textX,
-			textY,
-			textColor.r * self.crtIntensity,
-			textColor.g * self.crtIntensity,
-			textColor.b * self.crtIntensity,
-			textColor.a,
-			TerminalConstants.FONT.CODE
-		)
+			self:drawText(
+				button.text,
+				textX,
+				textY,
+				textColor.r * self.crtIntensity,
+				textColor.g * self.crtIntensity,
+				textColor.b * self.crtIntensity,
+				textColor.a,
+				TerminalConstants.FONT.CODE
+			)
+		end
 	end
 end
 
@@ -1468,20 +1443,29 @@ function KnoxNet_Terminal:onMouseDown(x, y)
 			and y <= self.displayY + self.displayHeight
 		then
 			if self.currentState == "mainMenu" or self.currentState == "settings" then
+				-- Get responsive padding based on terminal size
+				local padding = TerminalConstants.getResponsivePadding(self.width, self.height)
+
+				-- Calculate content area with proper padding
+				local contentX = self.displayX + padding.contentEdge
+				local contentY = self.contentAreaY + padding.contentEdge
+				local contentWidth = self.displayWidth - (padding.contentEdge * 2)
+				local contentHeight = self.contentAreaHeight - (padding.contentEdge * 2)
+
 				local columns = self:getButtonGridCols()
-				local totalButtonWidth = self.displayWidth * 0.8
-				local buttonWidth = (totalButtonWidth - TerminalConstants.LAYOUT.MAIN_MENU.BUTTONS_PADDING) / columns
+				local totalButtonWidth = contentWidth * 0.8
+				local buttonWidth = (totalButtonWidth - padding.buttonSpacing) / columns
 				local buttonHeight = self.lineHeight * 1.5
 
-				local startX = self.displayX + (self.displayWidth - totalButtonWidth) / 2
-				local startY = self.contentAreaY + 30
+				local startX = contentX + (contentWidth - totalButtonWidth) / 2
+				local startY = contentY + padding.contentEdge
 
 				for i = 1, #self.buttons do
 					local col = (i - 1) % columns
 					local row = math.floor((i - 1) / columns)
 
-					local buttonX = startX + col * (buttonWidth + TerminalConstants.LAYOUT.MAIN_MENU.BUTTONS_PADDING)
-					local buttonY = startY + row * (buttonHeight + 15)
+					local buttonX = startX + col * (buttonWidth + padding.buttonSpacing)
+					local buttonY = startY + row * (buttonHeight + padding.buttonSpacing)
 
 					if x >= buttonX and x <= buttonX + buttonWidth and y >= buttonY and y <= buttonY + buttonHeight then
 						self.selectedButton = i
@@ -1513,7 +1497,11 @@ function KnoxNet_Terminal:onMouseUp(x, y)
 	ISPanel.onMouseUp(self, x, y)
 
 	if self.currentState ~= "powerOff" then
-		if self.currentState == "module" then
+		if self.currentState == "mainMenu" then
+			if self.terminalMenuManager and self.terminalMenuManager:onMouseUp(x, y) then
+				return true
+			end
+		elseif self.currentState == "module" then
 			local module = self.activeModules[self.currentModule]
 			if module and module.onMouseUp then
 				if module:onMouseUp(x, y) then
@@ -1527,7 +1515,11 @@ end
 ---@param del number Scroll delta
 ---@return boolean
 function KnoxNet_Terminal:onMouseWheel(del)
-	if self.currentState == "module" then
+	if self.currentState == "mainMenu" then
+		if self.terminalMenuManager and self.terminalMenuManager:onMouseWheel(del) then
+			return true
+		end
+	elseif self.currentState == "module" then
 		local stateHandler = self.states[self.currentState]
 		if stateHandler and stateHandler.onMouseWheel then
 			if stateHandler.onMouseWheel(self, del) then
@@ -1663,10 +1655,13 @@ function KnoxNet_Terminal:new(x, y, width, height, playerObj)
 	o.origTexHeight = o.crtMonitorTexture:getHeightOrig()
 	local aspectRatio = o.origTexWidth / o.origTexHeight
 
-	o.baseWidth = math.min(
-		math.max(screenWidth * TerminalConstants.SCREEN_RATIO, TerminalConstants.MIN_WIDTH),
-		TerminalConstants.MAX_WIDTH
-	)
+	o.baseWidth = (screenWidth * TerminalConstants.SCREEN_RATIO < TerminalConstants.MIN_WIDTH)
+			and TerminalConstants.MIN_WIDTH
+		or (
+			(screenWidth * TerminalConstants.SCREEN_RATIO > TerminalConstants.MAX_WIDTH)
+				and TerminalConstants.MAX_WIDTH
+			or screenWidth * TerminalConstants.SCREEN_RATIO
+		)
 	o.baseHeight = o.baseWidth / aspectRatio
 
 	if o.baseHeight > screenHeight then

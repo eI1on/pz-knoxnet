@@ -1,5 +1,6 @@
 local Constants = require("KnoxNet_GamesModule/core/Constants")
 local TerminalSounds = require("KnoxNet/core/TerminalSounds")
+local DoomMainMenu = require("KnoxNet_GamesModule/games/DoomMainMenu")
 
 local KnoxNet_Terminal = require("KnoxNet/core/Terminal")
 
@@ -17,8 +18,8 @@ local DOOM_CONST = {
 	MAP_WIDTH = 16,
 	MAP_HEIGHT = 16,
 
-	MOVE_SPEED = 0.05,
-	ROTATION_SPEED = 0.03,
+	MOVE_SPEED = 0.75,
+	ROTATION_SPEED = 0.5,
 
 	FOV = math.pi / 3,
 	NUM_RAYS = 120,
@@ -46,7 +47,6 @@ local DOOM_CONST = {
 		HUD = { r = 1, g = 1, b = 0, a = 1 }, -- yellow
 	},
 
-	-- (1 = wall, 0 = empty space, 2 = enemy spawn)
 	MAP = {
 		{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 },
 		{ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 },
@@ -83,7 +83,11 @@ DoomGame.gameState = {
 	enemies = {},
 	projectiles = {},
 
-	textures = {},
+	textures = {
+		walls = {},
+		wallStrips = {},
+	},
+	useTexturedWalls = false,
 
 	isGameOver = false,
 	level = 1,
@@ -103,6 +107,43 @@ DoomGame.gameState = {
 	displayHeight = 0,
 	displayX = 0,
 	displayY = 0,
+
+	keysPressed = {
+		[Keyboard.KEY_UP] = false,
+		[Keyboard.KEY_DOWN] = false,
+		[Keyboard.KEY_LEFT] = false,
+		[Keyboard.KEY_RIGHT] = false,
+	},
+
+	keyTimers = {
+		[Keyboard.KEY_UP] = 0,
+		[Keyboard.KEY_DOWN] = 0,
+		[Keyboard.KEY_LEFT] = 0,
+		[Keyboard.KEY_RIGHT] = 0,
+	},
+
+	keyReleaseThreshold = 100,
+
+	movementInterpolation = 0.15, -- sSmoothing factor (0.0 = no smoothing, 1.0 = instant movement)
+	rotationInterpolation = 0.12, -- rotation smoothing factor
+	targetX = 2.5,
+	targetY = 2.5,
+	targetAngle = 0,
+
+	velocityX = 0,
+	velocityY = 0,
+	velocityAngle = 0,
+
+	movementDamping = 0.85,
+	rotationDamping = 0.90,
+
+	acceleration = 0.08,
+	deceleration = 0.12,
+	rotationAcceleration = 0.06,
+	rotationDeceleration = 0.10,
+
+	isMoving = false,
+	isRotating = false,
 }
 
 function DoomGame:resetState()
@@ -122,7 +163,11 @@ function DoomGame:resetState()
 		enemies = {},
 		projectiles = {},
 
-		textures = {},
+		textures = {
+			walls = {},
+			wallStrips = {},
+		},
+		useTexturedWalls = false,
 
 		isGameOver = false,
 		level = 1,
@@ -142,7 +187,258 @@ function DoomGame:resetState()
 		displayHeight = 0,
 		displayX = 0,
 		displayY = 0,
+
+		keysPressed = {
+			[Keyboard.KEY_UP] = false,
+			[Keyboard.KEY_DOWN] = false,
+			[Keyboard.KEY_LEFT] = false,
+			[Keyboard.KEY_RIGHT] = false,
+		},
+
+		keyTimers = {
+			[Keyboard.KEY_UP] = 0,
+			[Keyboard.KEY_DOWN] = 0,
+			[Keyboard.KEY_LEFT] = 0,
+			[Keyboard.KEY_RIGHT] = 0,
+		},
+
+		keyReleaseThreshold = 100,
+
+		movementInterpolation = 0.15, -- sSmoothing factor (0.0 = no smoothing, 1.0 = instant movement)
+		rotationInterpolation = 0.12, -- rotation smoothing factor
+		targetX = 2.5,
+		targetY = 2.5,
+		targetAngle = 0,
+
+		velocityX = 0,
+		velocityY = 0,
+		velocityAngle = 0,
+
+		movementDamping = 0.85,
+		rotationDamping = 0.90,
+
+		acceleration = 0.08,
+		deceleration = 0.12,
+		rotationAcceleration = 0.06,
+		rotationDeceleration = 0.10,
+
+		isMoving = false,
+		isRotating = false,
 	}
+end
+
+function DoomGame:loadTextures()
+	self.gameState.textures.walls = {}
+
+	local textureFiles = {
+		"media/ui/KnoxNet_GamesModule/doom/ui_knoxnet_doom_redbrickwall_1.png",
+		"media/ui/KnoxNet_GamesModule/doom/ui_knoxnet_doom_redbrickwall_2.png",
+		"media/ui/KnoxNet_GamesModule/doom/ui_knoxnet_doom_redbrickwall_3.png",
+		"media/ui/KnoxNet_GamesModule/doom/ui_knoxnet_doom_redbrickwall_4.png",
+	}
+
+	for i, file in ipairs(textureFiles) do
+		local texture = getTexture(file)
+		if texture then
+			table.insert(self.gameState.textures.walls, texture)
+		end
+	end
+
+	if #self.gameState.textures.walls == 0 then
+		self.gameState.useTexturedWalls = false
+	else
+		self.gameState.useTexturedWalls = true
+	end
+end
+
+function DoomGame:getWallTexture(mapX, mapY, side)
+	local textureIndex = ((mapX + mapY + side) % 4) + 1
+	return self.gameState.textures.walls[textureIndex] or self.gameState.textures.walls[1]
+end
+
+function DoomGame:calculateTextureCoordinates(hitX, hitY, side)
+	local wallX = 0
+	if side == 0 then
+		wallX = hitY - math.floor(hitY)
+	else
+		wallX = hitX - math.floor(hitX)
+	end
+
+	if wallX < 0 then
+		wallX = wallX + 1
+	end
+	if wallX >= 1 then
+		wallX = wallX - 1
+	end
+
+	return wallX
+end
+
+function DoomGame:groupWallStrips(wallStrips)
+	local groups = {}
+	local currentGroup = nil
+
+	for i, strip in ipairs(wallStrips) do
+		local canGroup = false
+
+		if
+			currentGroup
+			and currentGroup.texture == strip.texture
+			and currentGroup.side == strip.side
+			and currentGroup.mapX == strip.mapX
+			and currentGroup.mapY == strip.mapY
+			and math.abs(currentGroup.distance - strip.distance) < 0.3
+			and math.abs(currentGroup.wallHeight - strip.wallHeight) < 5
+			and math.abs(currentGroup.brightness - strip.brightness) < 0.1
+		then
+			canGroup = true
+		end
+
+		if not canGroup then
+			if currentGroup then
+				table.insert(groups, currentGroup)
+			end
+			currentGroup = {
+				texture = strip.texture,
+				side = strip.side,
+				strips = { strip },
+				startX = strip.screenX,
+				endX = strip.screenX + strip.width,
+				distance = strip.distance,
+				wallTop = strip.wallTop,
+				wallHeight = strip.wallHeight,
+				brightness = strip.brightness,
+				textureStartX = strip.textureX,
+				textureEndX = strip.textureX,
+				mapX = strip.mapX,
+				mapY = strip.mapY,
+			}
+		else
+			table.insert(currentGroup.strips, strip)
+			currentGroup.endX = strip.screenX + strip.width
+			currentGroup.textureEndX = strip.textureX
+		end
+	end
+
+	if currentGroup then
+		table.insert(groups, currentGroup)
+	end
+
+	return groups
+end
+
+function DoomGame:renderTexturedWalls(wallStrips)
+	if #wallStrips == 0 then
+		return
+	end
+
+	local spriteRenderer = getRenderer()
+
+	local terminalToGameX = function(x)
+		return x + self.terminal.x
+	end
+	local terminalToGameY = function(y)
+		return y + self.terminal.y
+	end
+
+	for _, strip in ipairs(wallStrips) do
+		local texture = strip.texture
+		if texture then
+			local renderX = strip.screenX
+			local renderWidth = strip.width
+
+			if renderX < self.gameState.displayX then
+				local overflow = self.gameState.displayX - renderX
+				renderX = self.gameState.displayX
+				renderWidth = renderWidth - overflow
+			end
+
+			if renderX + renderWidth > self.gameState.displayX + self.gameState.displayWidth then
+				renderWidth = (self.gameState.displayX + self.gameState.displayWidth) - renderX
+			end
+
+			if renderWidth > 0 and renderX >= self.gameState.displayX then
+				local maxTextureWidth = 48
+				local segments = math.max(1, math.ceil(renderWidth / maxTextureWidth))
+				local segmentWidth = renderWidth / segments
+
+				for i = 0, segments - 1 do
+					local segmentX = renderX + (i * segmentWidth)
+
+					local gameX1 = terminalToGameX(segmentX)
+					local gameY1 = terminalToGameY(strip.wallTop)
+					local gameX2 = terminalToGameX(segmentX + segmentWidth)
+					local gameY2 = terminalToGameY(strip.wallTop + strip.wallHeight)
+
+					local textureProgress = i / segments
+					local segmentU1 = (strip.textureX + textureProgress) % 1.0
+					local segmentU2 = (strip.textureX + textureProgress + (1.0 / segments)) % 1.0
+
+					if segmentU2 < segmentU1 then
+						segmentU2 = segmentU1 + (1.0 / segments)
+					end
+
+					segmentU1 = math.max(0.0, math.min(1.0, segmentU1))
+					segmentU2 = math.max(segmentU1 + 0.01, math.min(1.0, segmentU2))
+
+					local r = strip.brightness
+					local g = strip.brightness
+					local b = strip.brightness
+					local a = 1.0
+
+					spriteRenderer:renderPoly(
+						texture,
+						gameX1, -- x1 (top-left)
+						gameY1, -- y1 (top-left)
+						gameX2, -- x2 (top-right)
+						gameY1, -- y2 (top-right)
+						gameX2, -- x3 (bottom-right)
+						gameY2, -- y3 (bottom-right)
+						gameX1, -- x4 (bottom-left)
+						gameY2, -- y4 (bottom-left)
+						r,
+						g,
+						b,
+						a, -- color
+						segmentU1,
+						0.0, -- u1, v1 (top-left UV)
+						segmentU2,
+						0.0, -- u2, v2 (top-right UV)
+						segmentU2,
+						1.0, -- u3, v3 (bottom-right UV)
+						segmentU1,
+						1.0 -- u4, v4 (bottom-left UV)
+					)
+				end
+			end
+		end
+	end
+end
+
+function DoomGame:renderFallbackWalls(wallStrips)
+	for _, strip in ipairs(wallStrips) do
+		local wallColor = DOOM_CONST.COLORS.WALL
+
+		if strip.side == 1 then
+			wallColor = {
+				r = DOOM_CONST.COLORS.WALL.r * 0.8,
+				g = DOOM_CONST.COLORS.WALL.g * 0.8,
+				b = DOOM_CONST.COLORS.WALL.b * 0.8,
+				a = DOOM_CONST.COLORS.WALL.a,
+			}
+		end
+
+		self.terminal:drawRect(
+			strip.screenX,
+			strip.wallTop,
+			strip.width,
+			strip.wallHeight,
+			1,
+			wallColor.r * strip.brightness,
+			wallColor.g * strip.brightness,
+			wallColor.b * strip.brightness
+		)
+	end
 end
 
 function DoomGame:preview(x, y, width, height, terminal, gamesModule)
@@ -195,6 +491,8 @@ function DoomGame:activate(gamesModule)
 
 	self.gameState.stripWidth = math.max(1, math.floor(self.gameState.displayWidth / DOOM_CONST.NUM_RAYS))
 	self.gameState.halfHeight = math.floor(self.gameState.displayHeight / 2)
+
+	self:loadTextures()
 
 	self.gameState.showMinimap = true
 	self.gameState.minimapSize = "medium"
@@ -278,7 +576,6 @@ function DoomGame:castRay(angle)
 	local playerMapX = math.floor(self.gameState.player.x)
 	local playerMapY = math.floor(self.gameState.player.y)
 
-	-- dDA (Digital Differential Analysis) algorithm for faster ray casting
 	local deltaDistX = math.abs(1 / rayX)
 	local deltaDistY = math.abs(1 / rayY)
 
@@ -343,11 +640,39 @@ function DoomGame:castRay(angle)
 
 	distance = math.max(0.1, math.min(distance, 20))
 
-	return distance, hit, side
+	local hitX, hitY
+	if side == 0 then
+		hitY = self.gameState.player.y + distance * math.sin(angle)
+		hitX = mapX
+	elseif side == 1 then
+		hitX = self.gameState.player.x + distance * math.cos(angle)
+		hitY = mapY
+	else
+		hitX = self.gameState.player.x + distance * math.cos(angle)
+		hitY = self.gameState.player.y + distance * math.sin(angle)
+	end
+
+	return distance, hit, side, mapX, mapY, hitX, hitY
 end
 
 function DoomGame:calculateDistance(x1, y1, x2, y2)
 	return math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+end
+
+function DoomGame:smoothStep(t)
+	return t * t * (3.0 - 2.0 * t)
+end
+
+function DoomGame:exponentialSmoothing(current, target, factor)
+	return current + (target - current) * factor
+end
+
+function DoomGame:clamp(value, min, max)
+	return math.max(min, math.min(max, value))
+end
+
+function DoomGame:lerp(a, b, t)
+	return a + (b - a) * t
 end
 
 function DoomGame:update()
@@ -355,6 +680,102 @@ function DoomGame:update()
 	local deltaTime = (currentTime - self.gameState.lastUpdateTime) / 1000
 
 	deltaTime = math.min(deltaTime, 0.1)
+
+	if not self.gameState.isGameOver then
+		local moveSpeed = DOOM_CONST.MOVE_SPEED * deltaTime
+		local rotateSpeed = DOOM_CONST.ROTATION_SPEED * deltaTime
+
+		local targetX = self.gameState.player.x
+		local targetY = self.gameState.player.y
+		local targetAngle = self.gameState.player.angle
+
+		for key, isPressed in pairs(self.gameState.keysPressed) do
+			if isPressed then
+				self.gameState.keyTimers[key] = self.gameState.keyTimers[key] + deltaTime * 1000
+
+				if self.gameState.keyTimers[key] > 100 then
+					self.gameState.keysPressed[key] = false
+					self.gameState.keyTimers[key] = 0
+				end
+			end
+		end
+
+		if self.gameState.keysPressed[Keyboard.KEY_UP] then
+			local newX = targetX + math.cos(self.gameState.player.angle) * moveSpeed
+			local newY = targetY + math.sin(self.gameState.player.angle) * moveSpeed
+
+			if not self:checkCollision(newX, newY) then
+				targetX = newX
+				targetY = newY
+			end
+		end
+
+		if self.gameState.keysPressed[Keyboard.KEY_DOWN] then
+			local newX = targetX - math.cos(self.gameState.player.angle) * moveSpeed
+			local newY = targetY - math.sin(self.gameState.player.angle) * moveSpeed
+
+			if not self:checkCollision(newX, newY) then
+				targetX = newX
+				targetY = newY
+			end
+		end
+
+		if self.gameState.keysPressed[Keyboard.KEY_LEFT] then
+			targetAngle = targetAngle - rotateSpeed
+		end
+
+		if self.gameState.keysPressed[Keyboard.KEY_RIGHT] then
+			targetAngle = targetAngle + rotateSpeed
+		end
+
+		local moveInterp = self.gameState.movementInterpolation
+		local rotInterp = self.gameState.rotationInterpolation
+
+		local hasMovementInput = self.gameState.keysPressed[Keyboard.KEY_UP]
+			or self.gameState.keysPressed[Keyboard.KEY_DOWN]
+		local hasRotationInput = self.gameState.keysPressed[Keyboard.KEY_LEFT]
+			or self.gameState.keysPressed[Keyboard.KEY_RIGHT]
+
+		if hasMovementInput then
+			moveInterp = self.gameState.acceleration
+			self.gameState.isMoving = true
+		else
+			moveInterp = self.gameState.deceleration
+		end
+
+		if hasRotationInput then
+			rotInterp = self.gameState.rotationAcceleration
+			self.gameState.isRotating = true
+		else
+			rotInterp = self.gameState.rotationDeceleration
+		end
+
+		local smoothT = self:smoothStep(moveInterp)
+		self.gameState.player.x = self:lerp(self.gameState.player.x, targetX, smoothT)
+		self.gameState.player.y = self:lerp(self.gameState.player.y, targetY, smoothT)
+
+		self.gameState.player.angle = self:exponentialSmoothing(self.gameState.player.angle, targetAngle, rotInterp)
+
+		local damping = self.gameState.movementDamping
+		local rotDamping = self.gameState.rotationDamping
+
+		local deltaX = targetX - self.gameState.player.x
+		local deltaY = targetY - self.gameState.player.y
+		local deltaAngle = targetAngle - self.gameState.player.angle
+
+		self.gameState.velocityX = self.gameState.velocityX * damping + deltaX * (1 - damping)
+		self.gameState.velocityY = self.gameState.velocityY * damping + deltaY * (1 - damping)
+		self.gameState.velocityAngle = self.gameState.velocityAngle * rotDamping + deltaAngle * (1 - rotDamping)
+
+		self.gameState.player.x = self.gameState.player.x + self.gameState.velocityX
+		self.gameState.player.y = self.gameState.player.y + self.gameState.velocityY
+		self.gameState.player.angle = self.gameState.player.angle + self.gameState.velocityAngle
+
+		self.gameState.player.angle = self.gameState.player.angle % (2 * math.pi)
+		if self.gameState.player.angle < 0 then
+			self.gameState.player.angle = self.gameState.player.angle + 2 * math.pi
+		end
+	end
 
 	self.gameState.weaponBob = self.gameState.weaponBob + deltaTime * 2 * self.gameState.weaponBobDir
 	if self.gameState.weaponBob > 1 then
@@ -566,6 +987,22 @@ function DoomGame:checkLineOfSight(startX, startY, endX, endY)
 	return true
 end
 
+function DoomGame:onKeyStartPressed(key)
+	if self.gameState.keysPressed[key] ~= nil then
+		self.gameState.keysPressed[key] = true
+		return true
+	end
+	return false
+end
+
+function DoomGame:onKeyKeepPressed(key)
+	if self.gameState.keysPressed[key] ~= nil then
+		self.gameState.keysPressed[key] = true
+		return true
+	end
+	return false
+end
+
 function DoomGame:onKeyPress(key)
 	if self.gameState.isGameOver then
 		if key == Keyboard.KEY_SPACE or key == Keyboard.KEY_BACK then
@@ -575,34 +1012,25 @@ function DoomGame:onKeyPress(key)
 		return false
 	end
 
-	local moveSpeed = DOOM_CONST.MOVE_SPEED
-	local rotateSpeed = DOOM_CONST.ROTATION_SPEED
-
 	if key == Keyboard.KEY_UP then
-		local newX = self.gameState.player.x + math.cos(self.gameState.player.angle) * moveSpeed
-		local newY = self.gameState.player.y + math.sin(self.gameState.player.angle) * moveSpeed
-
-		if not self:checkCollision(newX, newY) then
-			self.gameState.player.x = newX
-			self.gameState.player.y = newY
-		end
+		self.gameState.keysPressed[Keyboard.KEY_UP] = true
+		self.gameState.keyTimers[Keyboard.KEY_UP] = 0
 		return true
 	elseif key == Keyboard.KEY_DOWN then
-		local newX = self.gameState.player.x - math.cos(self.gameState.player.angle) * moveSpeed
-		local newY = self.gameState.player.y - math.sin(self.gameState.player.angle) * moveSpeed
-
-		if not self:checkCollision(newX, newY) then
-			self.gameState.player.x = newX
-			self.gameState.player.y = newY
-		end
+		self.gameState.keysPressed[Keyboard.KEY_DOWN] = true
+		self.gameState.keyTimers[Keyboard.KEY_DOWN] = 0
 		return true
 	elseif key == Keyboard.KEY_LEFT then
-		self.gameState.player.angle = self.gameState.player.angle - rotateSpeed
+		self.gameState.keysPressed[Keyboard.KEY_LEFT] = true
+		self.gameState.keyTimers[Keyboard.KEY_LEFT] = 0
 		return true
 	elseif key == Keyboard.KEY_RIGHT then
-		self.gameState.player.angle = self.gameState.player.angle + rotateSpeed
+		self.gameState.keysPressed[Keyboard.KEY_RIGHT] = true
+		self.gameState.keyTimers[Keyboard.KEY_RIGHT] = 0
 		return true
-	elseif key == Keyboard.KEY_SPACE then
+	end
+
+	if key == Keyboard.KEY_SPACE then
 		local currentTime = getTimeInMillis()
 		local weapon = DOOM_CONST.WEAPONS[self.gameState.player.currentWeapon]
 
@@ -670,6 +1098,9 @@ function DoomGame:onKeyPress(key)
 		end
 		TerminalSounds.playUISound("sfx_knoxnet_key_2")
 		return true
+	elseif key == Keyboard.KEY_T then
+		self.gameState.useTexturedWalls = not self.gameState.useTexturedWalls
+		return true
 	end
 
 	return false
@@ -705,59 +1136,66 @@ function DoomGame:render()
 		depthBuffer[i] = 20.0
 	end
 
+	local wallStrips = {}
 	local numRays = math.ceil(self.gameState.displayWidth / self.gameState.stripWidth)
 
 	for i = 0, numRays do
 		local rayRatio = i / numRays
 		local rayAngle = self.gameState.player.angle - (DOOM_CONST.FOV / 2) + (DOOM_CONST.FOV * rayRatio)
 
-		local distance, hitWall, side = self:castRay(rayAngle)
+		local distance, hitWall, side, mapX, mapY, hitX, hitY = self:castRay(rayAngle)
 
 		if i < DOOM_CONST.NUM_RAYS then
 			depthBuffer[i] = distance
 		end
 
-		local correctedDistance = distance * math.cos(rayAngle - self.gameState.player.angle)
+		if hitWall then
+			local correctedDistance = distance * math.cos(rayAngle - self.gameState.player.angle)
 
-		local wallHeight =
-			math.min(self.gameState.displayHeight, math.floor(self.gameState.displayHeight / correctedDistance))
+			local wallHeight =
+				math.min(self.gameState.displayHeight, math.floor(self.gameState.displayHeight / correctedDistance))
 
-		local wallTop = self.gameState.displayY + (self.gameState.displayHeight - wallHeight) / 2
+			local wallTop = self.gameState.displayY + (self.gameState.displayHeight - wallHeight) / 2
 
-		local brightness = math.max(0.2, 1.0 - correctedDistance / 10)
-
-		local wallColor = DOOM_CONST.COLORS.WALL
-
-		if side == 1 then
-			wallColor = {
-				r = DOOM_CONST.COLORS.WALL.r * 0.8,
-				g = DOOM_CONST.COLORS.WALL.g * 0.8,
-				b = DOOM_CONST.COLORS.WALL.b * 0.8,
-				a = DOOM_CONST.COLORS.WALL.a,
-			}
-		end
-
-		local stripX = self.gameState.displayX + i * self.gameState.stripWidth
-
-		if stripX < self.gameState.displayX + self.gameState.displayWidth then
-			local actualStripWidth = self.gameState.stripWidth
-			if stripX + actualStripWidth > self.gameState.displayX + self.gameState.displayWidth then
-				actualStripWidth = (self.gameState.displayX + self.gameState.displayWidth) - stripX
+			local brightness = math.max(0.2, 1.0 - correctedDistance / 10)
+			if side == 1 then
+				brightness = brightness * 0.8 -- Darken horizontal walls slightly
 			end
 
-			if actualStripWidth > 0 then
-				self.terminal:drawRect(
-					stripX,
-					wallTop,
-					actualStripWidth,
-					wallHeight,
-					1,
-					wallColor.r * brightness,
-					wallColor.g * brightness,
-					wallColor.b * brightness
-				)
+			local stripX = self.gameState.displayX + i * self.gameState.stripWidth
+
+			if stripX < self.gameState.displayX + self.gameState.displayWidth then
+				local actualStripWidth = self.gameState.stripWidth
+				if stripX + actualStripWidth > self.gameState.displayX + self.gameState.displayWidth then
+					actualStripWidth = (self.gameState.displayX + self.gameState.displayWidth) - stripX
+				end
+
+				if actualStripWidth > 0 then
+					local texture = self:getWallTexture(mapX, mapY, side)
+					local textureX = self:calculateTextureCoordinates(hitX, hitY, side)
+
+					table.insert(wallStrips, {
+						texture = texture,
+						side = side,
+						screenX = stripX,
+						width = actualStripWidth,
+						wallTop = wallTop,
+						wallHeight = wallHeight,
+						brightness = brightness,
+						distance = correctedDistance,
+						textureX = textureX,
+						mapX = mapX,
+						mapY = mapY,
+					})
+				end
 			end
 		end
+	end
+
+	if self.gameState.useTexturedWalls then
+		self:renderTexturedWalls(wallStrips)
+	else
+		self:renderFallbackWalls(wallStrips)
 	end
 
 	self:renderMinimap()
@@ -847,10 +1285,10 @@ function DoomGame:render()
 		healthText,
 		self.gameState.displayX + 10,
 		hudY,
-		DOOM_CONST.COLORS.TEXT.a,
-		DOOM_CONST.COLORS.TEXT.r,
-		DOOM_CONST.COLORS.TEXT.g,
-		DOOM_CONST.COLORS.TEXT.b,
+		DOOM_CONST.COLORS.TEXT.NORMAL.a,
+		DOOM_CONST.COLORS.TEXT.NORMAL.r,
+		DOOM_CONST.COLORS.TEXT.NORMAL.g,
+		DOOM_CONST.COLORS.TEXT.NORMAL.b,
 		Constants.UI_CONST.FONT.CODE
 	)
 
@@ -874,7 +1312,7 @@ function DoomGame:render()
 
 		if self.gameState.player.health <= 0 then
 			gameOverText = "GAME OVER"
-			textColor = DOOM_CONST.COLORS.TEXT
+			textColor = DOOM_CONST.COLORS.TEXT.NORMAL
 		else
 			gameOverText = "LEVEL COMPLETE!"
 			textColor = DOOM_CONST.COLORS.HUD
@@ -914,16 +1352,16 @@ function DoomGame:render()
 
 		self.terminal:renderFooter(gameOverText .. "! | PRESS SPACE OR BACKSPACE TO CONTINUE")
 	else
-		self.terminal:renderFooter("ARROWS - MOVE | SPACE - SHOOT | 1,2 - WEAPONS | M - TOGGLE MAP | BACKSPACE - QUIT")
+		self.terminal:renderFooter(
+			"ARROWS - MOVE | SPACE - SHOOT | 1,2 - WEAPONS | M - TOGGLE MAP | T - TOGGLE TEXTURES | BACKSPACE - QUIT"
+		)
 	end
 end
 
 function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
-	-- basic body
 	self.terminal:drawRect(screenX - size / 2, screenY - size, size, size, 1, r, g, b)
 
 	if enemy.type == "IMP" then
-		-- head (slightly smaller than body)
 		local headSize = size * 0.6
 		self.terminal:drawRect(
 			screenX - headSize / 2,
@@ -936,7 +1374,6 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b * 0.9
 		)
 
-		-- eyes
 		local eyeSize = size / 10
 		local eyeSpacing = size / 5
 		self.terminal:drawRect(screenX - eyeSpacing, screenY - size - headSize * 0.4, eyeSize, eyeSize, 1, 1, 1, 0)
@@ -951,11 +1388,9 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			0
 		)
 
-		-- arms
 		local armWidth = size / 10
 		local armLength = size / 2
 
-		-- left arm
 		self.terminal:drawRect(
 			screenX - size / 2 - armWidth,
 			screenY - size + size / 3,
@@ -967,21 +1402,16 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b
 		)
 
-		-- right arm
 		self.terminal:drawRect(screenX + size / 2, screenY - size + size / 3, armWidth, armLength, 1, r, g, b)
 
-		-- mouth
 		self.terminal:drawRect(screenX - size / 6, screenY - size - headSize * 0.2, size / 3, size / 15, 1, 0, 0, 0)
 	elseif enemy.type == "DEMON" then
-		-- head with horns
 		local headSize = size * 0.7
 		self.terminal:drawRect(screenX - headSize / 2, screenY - size - headSize * 0.7, headSize, headSize, 1, r, g, b)
 
-		-- horns
 		local hornHeight = size / 3
 		local hornWidth = size / 8
 
-		-- left horn
 		self.terminal:drawRect(
 			screenX - headSize / 2 - hornWidth,
 			screenY - size - headSize * 0.7 - hornHeight,
@@ -993,7 +1423,6 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b
 		)
 
-		-- right horn
 		self.terminal:drawRect(
 			screenX + headSize / 2,
 			screenY - size - headSize * 0.7 - hornHeight,
@@ -1005,7 +1434,6 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b
 		)
 
-		-- eyes (glowing)
 		local eyeSize = size / 8
 		local eyeSpacing = size / 4
 		self.terminal:drawRect(screenX - eyeSpacing, screenY - size - headSize * 0.4, eyeSize, eyeSize, 1, 1, 0, 0)
@@ -1020,10 +1448,8 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			0
 		)
 
-		-- large mouth with teeth
 		self.terminal:drawRect(screenX - size / 4, screenY - size - headSize * 0.2, size / 2, size / 8, 1, 0, 0, 0)
 
-		-- teeth
 		local toothWidth = size / 20
 		local toothHeight = size / 15
 		for i = 0, 4 do
@@ -1039,11 +1465,9 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			)
 		end
 
-		-- arms with claws
 		local armWidth = size / 8
 		local armLength = size / 1.8
 
-		-- left arm
 		self.terminal:drawRect(
 			screenX - size / 2 - armWidth,
 			screenY - size + size / 4,
@@ -1055,7 +1479,6 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b
 		)
 
-		-- left claw
 		self.terminal:drawRect(
 			screenX - size / 2 - armWidth - size / 15,
 			screenY - size + size / 4 + armLength - size / 10,
@@ -1067,10 +1490,8 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 			b
 		)
 
-		-- right arm
 		self.terminal:drawRect(screenX + size / 2, screenY - size + size / 4, armWidth, armLength, 1, r, g, b)
 
-		-- right claw
 		self.terminal:drawRect(
 			screenX + size / 2 + armWidth,
 			screenY - size + size / 4 + armLength - size / 10,
@@ -1083,22 +1504,18 @@ function DoomGame:renderEnemy(enemy, screenX, screenY, size, r, g, b, dist)
 		)
 	end
 
-	-- animation for movement
 	if enemy.state == "idle" and dist < 8 then
 		local bobAmount = math.sin(getTimeInMillis() * 0.005) * (size / 20)
 		if self.gameState.animationFrame == 0 then
-			-- left leg forward
 			self.terminal:drawRect(screenX - size / 3, screenY - size / 3, size / 6, size / 3 + bobAmount, 1, r, g, b)
-			-- right leg back
+
 			self.terminal:drawRect(screenX + size / 6, screenY - size / 3, size / 6, size / 3 - bobAmount, 1, r, g, b)
 		else
-			-- left leg back
 			self.terminal:drawRect(screenX - size / 3, screenY - size / 3, size / 6, size / 3 - bobAmount, 1, r, g, b)
-			-- right leg forward
+
 			self.terminal:drawRect(screenX + size / 6, screenY - size / 3, size / 6, size / 3 + bobAmount, 1, r, g, b)
 		end
 	else
-		-- static legs when not moving
 		self.terminal:drawRect(screenX - size / 3, screenY - size / 3, size / 6, size / 3, 1, r, g, b)
 		self.terminal:drawRect(screenX + size / 6, screenY - size / 3, size / 6, size / 3, 1, r, g, b)
 	end
@@ -1112,7 +1529,6 @@ function DoomGame:renderWeapon()
 	local weaponScale = self.gameState.displayWidth / 800
 
 	if self.gameState.player.currentWeapon == "PISTOL" then
-		-- barrel
 		local barrelWidth = 40 * weaponScale
 		local barrelHeight = 10 * weaponScale
 		self.terminal:drawRect(
@@ -1126,7 +1542,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b
 		)
 
-		-- slide
 		local slideWidth = 45 * weaponScale
 		local slideHeight = 15 * weaponScale
 		self.terminal:drawRect(
@@ -1140,7 +1555,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.9
 		)
 
-		-- frame
 		local frameWidth = 30 * weaponScale
 		local frameHeight = 35 * weaponScale
 		self.terminal:drawRect(
@@ -1154,7 +1568,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b
 		)
 
-		-- grip
 		local gripWidth = 20 * weaponScale
 		local gripHeight = 40 * weaponScale
 		self.terminal:drawRect(
@@ -1168,7 +1581,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.8
 		)
 
-		-- trigger
 		local triggerWidth = 15 * weaponScale
 		local triggerHeight = 10 * weaponScale
 		self.terminal:drawRect(
@@ -1182,12 +1594,10 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.7
 		)
 
-		-- muzzle flash
 		if getTimeInMillis() - self.gameState.lastShootTime < 100 then
 			local flashCenterX = weaponX
 			local flashCenterY = weaponY - (80 + barrelHeight / 2) * weaponScale + bobOffset
 
-			-- outer glow
 			local flashSize = 25 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1200,7 +1610,6 @@ function DoomGame:renderWeapon()
 				0
 			)
 
-			-- inner glow
 			flashSize = 15 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1213,7 +1622,6 @@ function DoomGame:renderWeapon()
 				0.5
 			)
 
-			-- center
 			flashSize = 8 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1227,7 +1635,6 @@ function DoomGame:renderWeapon()
 			)
 		end
 	elseif self.gameState.player.currentWeapon == "SHOTGUN" then
-		-- barrel
 		local barrelWidth = 60 * weaponScale
 		local barrelHeight = 12 * weaponScale
 		self.terminal:drawRect(
@@ -1241,7 +1648,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b
 		)
 
-		-- pump
 		local pumpWidth = 35 * weaponScale
 		local pumpHeight = 18 * weaponScale
 		self.terminal:drawRect(
@@ -1255,7 +1661,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.8
 		)
 
-		-- receiver
 		local receiverWidth = 40 * weaponScale
 		local receiverHeight = 25 * weaponScale
 		self.terminal:drawRect(
@@ -1269,7 +1674,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b
 		)
 
-		-- stock
 		local stockWidth = 25 * weaponScale
 		local stockHeight = 50 * weaponScale
 		self.terminal:drawRect(
@@ -1283,7 +1687,6 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.7
 		)
 
-		-- trigger
 		local triggerWidth = 15 * weaponScale
 		local triggerHeight = 10 * weaponScale
 		self.terminal:drawRect(
@@ -1297,12 +1700,10 @@ function DoomGame:renderWeapon()
 			DOOM_CONST.COLORS.WEAPON.b * 0.6
 		)
 
-		-- muzzle flash
 		if getTimeInMillis() - self.gameState.lastShootTime < 100 then
 			local flashCenterX = weaponX
 			local flashCenterY = weaponY - (80 + barrelHeight / 2) * weaponScale + bobOffset
 
-			-- outer glow
 			local flashSize = 35 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1315,7 +1716,6 @@ function DoomGame:renderWeapon()
 				0
 			)
 
-			-- inner glow
 			flashSize = 25 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1328,7 +1728,6 @@ function DoomGame:renderWeapon()
 				0.3
 			)
 
-			-- center
 			flashSize = 15 * weaponScale
 			self.terminal:drawRect(
 				flashCenterX - flashSize / 2,
@@ -1341,7 +1740,6 @@ function DoomGame:renderWeapon()
 				0.8
 			)
 
-			-- multiple pellet effect
 			for i = 1, 5 do
 				local pelletSize = 5 * weaponScale
 				local angle = rand:random() * math.pi * 2
@@ -1439,21 +1837,26 @@ function DoomGame:renderMinimap()
 	for i = 0, miniMapSize * 0.5, thickness / 2 do
 		local factor = i / (miniMapSize * 0.5)
 
-		-- left FOV line
 		local leftX = playerX + fovLeftX * factor
 		local leftY = playerY + fovLeftY * factor
 
-		-- right FOV line
 		local rightX = playerX + fovRightX * factor
 		local rightY = playerY + fovRightY * factor
 
-		-- draw dots along the FOV lines
 		self.terminal:drawRect(leftX - thickness / 2, leftY - thickness / 2, thickness, thickness, 0.4, 1, 1, 0)
 
 		self.terminal:drawRect(rightX - thickness / 2, rightY - thickness / 2, thickness, thickness, 0.4, 1, 1, 0)
 	end
 
 	self.terminal:drawText("MINIMAP", mapX + miniMapSize / 2 - 25, mapY - 15, 1, 1, 1, 0, Constants.UI_CONST.FONT.SMALL)
+end
+
+function DoomGame:getMainMenu()
+	return DoomMainMenu:new(self, GAME_INFO)
+end
+
+function DoomGame:setDifficulty(difficulty)
+	self.gameState.difficulty = difficulty
 end
 
 local GamesModule = require("KnoxNet_GamesModule/core/Module")

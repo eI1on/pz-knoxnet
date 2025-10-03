@@ -456,10 +456,11 @@ function LoreModule:onMouseWheel(delta)
 	end
 
 	if scrollManager then
+		local scrollAmount = math.abs(delta) * 3 * 20 -- 3x sensitivity
 		if delta > 0 then
-			scrollManager:scrollUp(20)
+			scrollManager:scrollUp(scrollAmount)
 		else
-			scrollManager:scrollDown(20)
+			scrollManager:scrollDown(scrollAmount)
 		end
 		return true
 	end

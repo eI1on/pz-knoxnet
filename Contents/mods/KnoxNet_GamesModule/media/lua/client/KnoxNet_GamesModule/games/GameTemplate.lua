@@ -1,102 +1,256 @@
 local Constants = require("KnoxNet_GamesModule/core/Constants")
 local TerminalSounds = require("KnoxNet/core/TerminalSounds")
+local GameMainMenu = require("KnoxNet_GamesModule/core/GameMainMenu")
 
 local KnoxNet_Terminal = require("KnoxNet/core/Terminal")
 
--- create a new game module
 local GameTemplate = {}
 
--- game metadata
+local GameTemplateMainMenu = GameMainMenu:new()
+
+function GameTemplateMainMenu:addGameSpecificOptions()
+	self:addMenuOption({
+		id = "high_scores",
+		type = "button",
+		text = "High Scores",
+		action = function(self, gamesModule)
+			self:showHighScores(gamesModule)
+		end,
+		enabled = true,
+	})
+
+	self:addMenuOption({
+		id = "instructions",
+		type = "button",
+		text = "How to Play",
+		action = function(self, gamesModule)
+			self:showInstructions(gamesModule)
+		end,
+		enabled = true,
+	})
+end
+
+function GameTemplateMainMenu:startNewGame(gamesModule)
+	TerminalSounds.playUISound("sfx_knoxnet_pacman_start")
+	gamesModule:startGame(self.gameInstance)
+end
+
+function GameTemplateMainMenu:render()
+	if self.menuState == "main" then
+		self:renderMainMenu()
+	elseif self.menuState == "high_scores" then
+		self:renderHighScores()
+	elseif self.menuState == "instructions" then
+		self:renderInstructions()
+	end
+end
+
+function GameTemplateMainMenu:renderHighScores()
+	self.terminal:renderTitle(self.gameInfo.name .. " - High Scores")
+
+	local termColors = Constants.UI_CONST.COLORS
+	self.terminal:drawRect(
+		self.terminal.displayX,
+		self.terminal.contentAreaY,
+		self.terminal.displayWidth,
+		self.terminal.contentAreaHeight,
+		termColors.BACKGROUND.a,
+		termColors.BACKGROUND.r,
+		termColors.BACKGROUND.g,
+		termColors.BACKGROUND.b
+	)
+
+	local centerX = self.terminal.displayX + self.terminal.displayWidth / 2
+	local startY = self.terminal.contentAreaY + 100
+	local lineHeight = 30
+
+	local title = "HIGH SCORES"
+	local titleWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.LARGE, title)
+	self.terminal:drawText(
+		title,
+		centerX - titleWidth / 2,
+		startY,
+		termColors.TEXT.NORMAL.r,
+		termColors.TEXT.NORMAL.g,
+		termColors.TEXT.NORMAL.b,
+		termColors.TEXT.NORMAL.a,
+		Constants.UI_CONST.FONT.LARGE
+	)
+
+	local scores = {
+		{ name = "PLAYER_1", score = 1000, level = 3 },
+		{ name = "PLAYER_2", score = 800, level = 2 },
+		{ name = "PLAYER_3", score = 600, level = 2 },
+		{ name = "PLAYER_4", score = 400, level = 1 },
+		{ name = "PLAYER_5", score = 200, level = 1 },
+	}
+
+	for i, scoreData in ipairs(scores) do
+		local scoreText = string.format("%d. %s - %d (Level %d)", i, scoreData.name, scoreData.score, scoreData.level)
+		local textWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.MEDIUM, scoreText)
+		local textY = startY + 80 + (i - 1) * lineHeight
+
+		self.terminal:drawText(
+			scoreText,
+			centerX - textWidth / 2,
+			textY,
+			termColors.TEXT.NORMAL.r,
+			termColors.TEXT.NORMAL.g,
+			termColors.TEXT.NORMAL.b,
+			termColors.TEXT.NORMAL.a,
+			Constants.UI_CONST.FONT.MEDIUM
+		)
+	end
+
+	self.terminal:renderFooter("BACKSPACE - BACK TO MAIN MENU")
+end
+
+function GameTemplateMainMenu:renderInstructions()
+	self.terminal:renderTitle(self.gameInfo.name .. " - How to Play")
+
+	local termColors = Constants.UI_CONST.COLORS
+	self.terminal:drawRect(
+		self.terminal.displayX,
+		self.terminal.contentAreaY,
+		self.terminal.displayWidth,
+		self.terminal.contentAreaHeight,
+		termColors.BACKGROUND.a,
+		termColors.BACKGROUND.r,
+		termColors.BACKGROUND.g,
+		termColors.BACKGROUND.b
+	)
+
+	local centerX = self.terminal.displayX + self.terminal.displayWidth / 2
+	local startY = self.terminal.contentAreaY + 80
+	local lineHeight = 25
+
+	local title = "HOW TO PLAY"
+	local titleWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.LARGE, title)
+	self.terminal:drawText(
+		title,
+		centerX - titleWidth / 2,
+		startY,
+		termColors.TEXT.NORMAL.r,
+		termColors.TEXT.NORMAL.g,
+		termColors.TEXT.NORMAL.b,
+		termColors.TEXT.NORMAL.a,
+		Constants.UI_CONST.FONT.LARGE
+	)
+
+	local instructions = {
+		"OBJECTIVE:",
+		"Complete the game objectives to win.",
+		"",
+		"CONTROLS:",
+		"Arrow Keys - Move/Navigate",
+		"Space - Action/Select",
+		"Backspace - Quit/Back",
+		"",
+		"RULES:",
+		"• Follow the game objectives",
+		"• Avoid obstacles and enemies",
+		"• Collect points and power-ups",
+		"• Complete levels to progress",
+		"",
+		"HAVE FUN!",
+	}
+
+	for i, instruction in ipairs(instructions) do
+		local textWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.MEDIUM, instruction)
+		local textY = startY + 60 + (i - 1) * lineHeight
+
+		local textX
+		if instruction:len() < 20 then
+			textX = centerX - textWidth / 2
+		else
+			textX = centerX - 150
+		end
+
+		self.terminal:drawText(
+			instruction,
+			textX,
+			textY,
+			termColors.TEXT.NORMAL.r,
+			termColors.TEXT.NORMAL.g,
+			termColors.TEXT.NORMAL.b,
+			termColors.TEXT.NORMAL.a,
+			Constants.UI_CONST.FONT.MEDIUM
+		)
+	end
+
+	self.terminal:renderFooter("BACKSPACE - BACK TO MAIN MENU")
+end
+
+function GameTemplateMainMenu:showHighScores(gamesModule)
+	self.menuState = "high_scores"
+	TerminalSounds.playUISound("sfx_knoxnet_key_1")
+end
+
+function GameTemplateMainMenu:showInstructions(gamesModule)
+	self.menuState = "instructions"
+	TerminalSounds.playUISound("sfx_knoxnet_key_1")
+end
+
 local GAME_INFO = {
 	id = "game_template", -- unique identifier for the game
 	name = "Game Template",
 	description = "Description of your game. This text appears in the game selection menu.",
 }
 
--- game state variables
 GameTemplate.gameState = {
-	-- put game-specific state variables here
+
 	score = 0,
 	level = 1,
 	gameOver = false,
 	lastUpdateTime = 0,
 }
 
--- initialize or reset the game state
 function GameTemplate:resetState()
 	self.gameState = {
 		score = 0,
 		level = 1,
 		gameOver = false,
 		lastUpdateTime = getTimeInMillis(),
-		-- reset other game-specific state
 	}
 end
 
--- called when the game is activated
 function GameTemplate:activate(gamesModule)
 	self:resetState()
 
-	-- store references to needed objects
 	self.gamesModule = gamesModule
 	self.terminal = gamesModule.terminal
 
-	-- set up any initial game layout, variables, etc.
-	-- example:
-	-- self.gridOffsetX = self.terminal.displayX + 50
-	-- self.gridOffsetY = self.terminal.contentAreaY + 20
-
-	-- play game start sound if needed
 	TerminalSounds.playUISound("sfx_knoxnet_pacman_start")
 end
 
--- called when the game is deactivated
-function GameTemplate:onDeactivate()
-	-- clean up resources, stop sounds, etc.
-end
+function GameTemplate:onDeactivate() end
 
--- draw the preview of the game in the game selection menu
 function GameTemplate:preview(x, y, width, height, terminal, gamesModule)
-	-- draw a representative preview of your game
-	-- this appears in the game selection grid
-
-	-- example:
 	terminal:drawRect(x, y, width, height, 0.8, 0.2, 0.2, 0.3)
 
 	terminal:drawText("PREVIEW", x + width / 2 - 30, y + height / 2 - 5, 1, 1, 1, 1, Constants.UI_CONST.FONT.SMALL)
 end
 
--- handle keyboard input
 function GameTemplate:onKeyPress(key, gamesModule)
 	if self.gameState.gameOver then
 		if key == Keyboard.KEY_SPACE or key == Keyboard.KEY_BACK then
-			-- return to game selection
 			gamesModule:onActivate()
 			return true
 		end
 		return false
 	end
 
-	-- handle game-specific keys
 	if key == Keyboard.KEY_LEFT then
-		-- handle left key press
-		-- example: self:moveLeft()
 		return true
 	elseif key == Keyboard.KEY_RIGHT then
-		-- handle right key press
-		-- example: self:moveRight()
 		return true
 	elseif key == Keyboard.KEY_UP then
-		-- handle up key press
 		return true
 	elseif key == Keyboard.KEY_DOWN then
-		-- handle down key press
 		return true
 	elseif key == Keyboard.KEY_SPACE then
-		-- handle space key press
 		return true
 	elseif key == Keyboard.KEY_BACK then
-		-- exit game
 		gamesModule:onActivate()
 		return true
 	end
@@ -104,43 +258,30 @@ function GameTemplate:onKeyPress(key, gamesModule)
 	return false
 end
 
--- optional: handle mouse input
 function GameTemplate:onMouseDown(x, y, gamesModule)
-	-- handle mouse clicks
 	return false
 end
 
--- optional: handle mouse wheel
 function GameTemplate:onMouseWheel(delta, gamesModule)
-	-- handle mouse wheel movement
 	return false
 end
 
--- hame update logic - called every frame
 function GameTemplate:update(gamesModule)
 	if self.gameState.gameOver then
-		-- handle game over state
 		return
 	end
 
 	local currentTime = getTimeInMillis()
 	local deltaTime = currentTime - self.gameState.lastUpdateTime
 
-	-- update game logic here
-	-- example: Move pieces, check collisions, etc.
-
 	self.gameState.lastUpdateTime = currentTime
 end
 
--- render the game
 function GameTemplate:render(gamesModule)
-	-- the terminal object for drawing
 	local terminal = gamesModule.terminal
 
-	-- render game title with score
 	terminal:renderTitle(GAME_INFO.name .. " - SCORE: " .. self.gameState.score .. " | LEVEL: " .. self.gameState.level)
 
-	-- draw game background
 	terminal:drawRect(
 		terminal.displayX,
 		terminal.contentAreaY,
@@ -152,12 +293,6 @@ function GameTemplate:render(gamesModule)
 		Constants.UI_CONST.COLORS.BACKGROUND.b
 	)
 
-	-- draw game elements
-	-- example: self:drawGameGrid()
-	-- example: self:drawGamePieces()
-	-- example: self:drawUI()
-
-	-- if game is over, show game over message
 	if self.gameState.gameOver then
 		local gameOverText = "GAME OVER"
 		local textWidth = getTextManager():MeasureStringX(Constants.UI_CONST.FONT.LARGE, gameOverText)
@@ -172,15 +307,23 @@ function GameTemplate:render(gamesModule)
 	end
 end
 
--- additional game-specific helper methods
---[[
-function GameTemplate:exampleHelperMethod()
-    -- implement game-specific functionality
-end
---]]
+function GameTemplate:exampleHelperMethod() end
 
--- register the game with the Games Module
--- local GamesModule = require("KnoxNet_GamesModule/core/Module")
--- GamesModule.registerGame(GAME_INFO, GameTemplate)
+function GameTemplate:getMainMenu()
+	return GameTemplateMainMenu:new(self, GAME_INFO)
+end
+
+function GameTemplateMainMenu:onKeyPress(key)
+	if self.menuState == "high_scores" or self.menuState == "instructions" then
+		if key == Keyboard.KEY_BACK then
+			self.menuState = "main"
+			TerminalSounds.playUISound("sfx_knoxnet_key_3")
+			return true
+		end
+		return false
+	end
+
+	return GameMainMenu.onKeyPress(self, key)
+end
 
 return GameTemplate

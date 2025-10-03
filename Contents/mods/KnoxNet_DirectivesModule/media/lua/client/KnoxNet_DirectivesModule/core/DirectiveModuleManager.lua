@@ -580,7 +580,8 @@ function DirectiveModuleManager.onKeyPress(key)
 end
 
 function DirectiveModuleManager.onMouseWheel(delta)
-	local scrollAmount = 20
+	-- Increase scroll sensitivity and use smooth scrolling
+	local scrollAmount = math.abs(delta) * 3 * 20 -- 3x sensitivity
 	local scrollManager = DirectiveModuleManager.getCurrentScrollManager()
 
 	if scrollManager then
@@ -713,6 +714,7 @@ function DirectiveModuleManager.onMouseDown(x, y)
 					targetScrollPosition = scrollManager.contentHeight - scrollManager.visibleHeight
 				end
 
+				-- Use smooth scrolling for scrollbar clicks
 				scrollManager:scrollTo(targetScrollPosition, true)
 				DirectiveModuleManager.viewStates.detailScrollOffset = scrollManager:getScrollOffset()
 				DirectiveModuleManager.viewStates.selectedDetailButton = 0
@@ -796,6 +798,7 @@ function DirectiveModuleManager.onMouseDown(x, y)
 					local clickPosition = (y - scrollbarY) / scrollbarHeight
 
 					clickPosition = math.max(0, math.min(1, clickPosition))
+					-- Use smooth scrolling for scrollbar clicks
 					currentScrollManager:scrollTo(math.floor(clickPosition * maxScroll), true)
 					return true
 				end

@@ -12,6 +12,22 @@ local UI_CONST = {
 	SCROLLBAR_WIDTH = 10,
 	SCROLLBAR_MIN_HANDLE = 30,
 
+	-- New responsive padding system
+	RESPONSIVE = {
+		-- Base padding that scales with terminal size
+		BASE_PADDING = 12,
+		-- Minimum padding regardless of size
+		MIN_PADDING = 8,
+		-- Maximum padding regardless of size
+		MAX_PADDING = 25,
+		-- Content area padding (from edges)
+		CONTENT_EDGE_PADDING = 15,
+		-- Tile spacing
+		TILE_SPACING = 12,
+		-- Header/footer content padding
+		HEADER_FOOTER_PADDING = 12,
+	},
+
 	FONT = {
 		SMALL = UIFont.Small,
 		MEDIUM = UIFont.Medium,
@@ -23,18 +39,64 @@ local UI_CONST = {
 		BORDER = { r = 0.4, g = 0.4, b = 0.4, a = 1 },
 		BACKGROUND = { r = 0.1, g = 0.1, b = 0.1, a = 0.75 },
 
-		TEXT = { r = 1, g = 1, b = 1, a = 1 },
-		TEXT_DIM = { r = 0.4, g = 1, b = 0.4, a = 1 },
+		TEXT = {
+			NORMAL = { r = 1, g = 1, b = 1, a = 1 },
+			DIM = { r = 0.4, g = 1, b = 0.4, a = 1 },
+			HIGHLIGHT = { r = 0.8, g = 1, b = 0.8, a = 1 },
+			WARNING = { r = 1, g = 0.8, b = 0.2, a = 1 },
+			ERROR = { r = 1, g = 0.3, b = 0.3, a = 1 },
+		},
 
-		SCROLLBAR_BG = { r = 0.2, g = 0.3, b = 0.3, a = 0.3 },
-		SCROLLBAR = { r = 0.4, g = 1, b = 0.4, a = 0.4 },
+		SCROLLBAR = {
+			BACKGROUND = { r = 0.2, g = 0.3, b = 0.3, a = 0.3 },
+			HANDLE = { r = 0.4, g = 1, b = 0.4, a = 0.4 },
+			BORDER = { r = 0.3, g = 0.8, b = 0.3, a = 0.5 },
+		},
 
-		BUTTON_SELECTED = { r = 0, g = 0, b = 0, a = 0 },
-		BUTTON_BORDER = { r = 0.2, g = 0.2, b = 1.0, a = 0.5 },
-		BUTTON_COLOR = { r = 0.2, g = 0.2, b = 1.0, a = 0.2 },
-		BUTTON_HOVER = { r = 0.3, g = 0.3, b = 1.0, a = 0.5 },
+		BUTTON = {
+			SELECTED = { r = 0, g = 0, b = 0, a = 0.5 },
+			BORDER = { r = 0.2, g = 0.2, b = 1.0, a = 0.5 },
+			COLOR = { r = 0.2, g = 0.2, b = 1.0, a = 0.2 },
+			HOVER = { r = 0.3, g = 0.3, b = 1.0, a = 0.5 },
+			CLOSE = { r = 0.5, g = 0.1, b = 0.1, a = 1.0 },
+			DISABLED = { r = 0.2, g = 0.2, b = 0.2, a = 0.5 },
+		},
+
+		CONTENT = {
+			BACKGROUND = { r = 0.1, g = 0.1, b = 0.15, a = 0.7 },
+			BORDER = { r = 0.25, g = 0.25, b = 0.3, a = 0.8 },
+		},
 	},
 }
+
+-- Function to calculate responsive padding based on terminal size
+---@param terminalWidth number Terminal width
+---@param terminalHeight number Terminal height
+---@return table Padding values
+UI_CONST.getResponsivePadding = function(terminalWidth, terminalHeight)
+	local baseSize = math.min(terminalWidth, terminalHeight)
+	local scaleFactor = baseSize / 800
+
+	scaleFactor = math.max(0.5, math.min(2.0, scaleFactor))
+
+	local responsive = UI_CONST.RESPONSIVE
+	local padding = {}
+
+	padding.base =
+		math.max(responsive.MIN_PADDING, math.min(responsive.MAX_PADDING, responsive.BASE_PADDING * scaleFactor))
+	padding.contentEdge = math.max(
+		responsive.MIN_PADDING,
+		math.min(responsive.MAX_PADDING, responsive.CONTENT_EDGE_PADDING * scaleFactor)
+	)
+	padding.tileSpacing =
+		math.max(responsive.MIN_PADDING, math.min(responsive.MAX_PADDING, responsive.TILE_SPACING * scaleFactor))
+	padding.headerFooter = math.max(
+		responsive.MIN_PADDING,
+		math.min(responsive.MAX_PADDING, responsive.HEADER_FOOTER_PADDING * scaleFactor)
+	)
+
+	return padding
+end
 
 local SNAKE_CONST = {
 	GRID_WIDTH = 30,
