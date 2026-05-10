@@ -1,0 +1,86 @@
+VERSION = 1,
+
+option KnoxNet.maxMessageLength
+{
+    type = integer,
+    min = 1,
+    max = 4000,
+    default = 500,
+    page = KnoxNet,
+    translation = KnoxNet_MaxMessageLength,
+}
+
+option KnoxNet.historyPageSize
+{
+    type = integer,
+    min = 1,
+    max = 200,
+    default = 50,
+    page = KnoxNet,
+    translation = KnoxNet_HistoryPageSize,
+}
+
+option KnoxNet.maxStoredMessagesPerChat
+{
+    type = integer,
+    min = 0,
+    max = 10000,
+    default = 0,
+    page = KnoxNet,
+    translation = KnoxNet_MaxStoredMessagesPerChat,
+}
+
+option KnoxNet.maxGroupMembers
+{
+    type = integer,
+    min = 2,
+    max = 100,
+    default = 24,
+    page = KnoxNet,
+    translation = KnoxNet_MaxGroupMembers,
+}
+
+option KnoxNet.maxGroupsPerPlayer
+{
+    type = integer,
+    min = 0,
+    max = 100,
+    default = 12,
+    page = KnoxNet,
+    translation = KnoxNet_MaxGroupsPerPlayer,
+}
+
+option KnoxNet.groupCreateAccess
+{
+    type = enum,
+    values = "all,admin,none",
+    default = all,
+    page = KnoxNet,
+    translation = KnoxNet_GroupCreateAccess,
+}
+
+option KnoxNet.notifyLiveMessages
+{
+    type = boolean,
+    default = true,
+    page = KnoxNet,
+    translation = KnoxNet_NotifyLiveMessages,
+}
+
+option KnoxNet.retainMessagesIndefinitely
+{
+    type = boolean,
+    default = true,
+    page = KnoxNet,
+    translation = KnoxNet_RetainMessagesIndefinitely,
+}
+
+option KnoxNet.rateLimitSeconds
+{
+    type = integer,
+    min = 0,
+    max = 30,
+    default = 1,
+    page = KnoxNet,
+    translation = KnoxNet_RateLimitSeconds,
+}

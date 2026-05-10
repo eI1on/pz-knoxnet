@@ -1,0 +1,7 @@
+name=[B41] Knox Net
+poster=poster.png
+id=KnoxNet
+description=In-game KnoxNet messenger: DMs & groups, persistent history, dock unread badge, optional HUD notifications, share map locations - click messages with locations to open the world map centred on the pin. Requires ElyonLib (load first).
+require=ElyonLib
+tags=Build 41,Interface,Multiplayer,Misc
+versionMin=41.0
