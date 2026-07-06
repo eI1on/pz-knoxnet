@@ -8,6 +8,7 @@ IGUI_EN = {
     Sandbox_KnoxNet_MaxGroupsPerPlayer = "Maximum groups per player",
     Sandbox_KnoxNet_GroupCreateAccess = "Who can create groups",
     Sandbox_KnoxNet_NotifyLiveMessages = "Show live message notifications",
+    Sandbox_KnoxNet_HideMenuDockButton = "Hide KnoxNet Dock button",
     Sandbox_KnoxNet_RetainMessagesIndefinitely = "Retain messages indefinitely",
     Sandbox_KnoxNet_RateLimitSeconds = "Message rate limit seconds",
 }

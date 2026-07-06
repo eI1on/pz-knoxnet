@@ -1378,20 +1378,35 @@ function KnoxNetUI.open()
 	ui:addToUIManager()
 end
 
-MenuDock.registerButton({
-	id = "knoxnet",
-	title = "KnoxNet",
-	icon = "media/ui/ui_icon_knoxnet.png",
-	allowSinglePlayer = true,
-	onClick = function()
-		KnoxNetUI.open()
-	end,
-	badge = {
-		text = function() return tostring(Client.totalUnread or 0) end,
-		maxBeforePlus = 99,
-		texture = "media/ui/ui_knoxnet_red_badge.png",
-	},
-})
+local MENU_DOCK_BUTTON_ID = "knoxnet"
+
+local function menuDockEntry()
+	return {
+		id = MENU_DOCK_BUTTON_ID,
+		title = "KnoxNet",
+		icon = "media/ui/ui_icon_knoxnet.png",
+		allowSinglePlayer = true,
+		onClick = function()
+			KnoxNetUI.open()
+		end,
+		badge = {
+			text = function() return tostring(Client.totalUnread or 0) end,
+			maxBeforePlus = 99,
+			texture = "media/ui/ui_knoxnet_red_badge.png",
+		},
+	}
+end
+
+function KnoxNetUI.syncMenuDockButton()
+	if Shared.getSettings().hideMenuDockButton == true then
+		MenuDock.unregisterButton(MENU_DOCK_BUTTON_ID)
+		return
+	end
+	MenuDock.registerButton(menuDockEntry())
+end
+
+KnoxNetUI.syncMenuDockButton()
+Events.OnGameStart.Add(KnoxNetUI.syncMenuDockButton)
 
 
 return KnoxNetUI

@@ -67,6 +67,14 @@ option KnoxNet.notifyLiveMessages
     translation = KnoxNet_NotifyLiveMessages,
 }
 
+option KnoxNet.hideMenuDockButton
+{
+    type = boolean,
+    default = false,
+    page = KnoxNet,
+    translation = KnoxNet_HideMenuDockButton,
+}
+
 option KnoxNet.retainMessagesIndefinitely
 {
     type = boolean,

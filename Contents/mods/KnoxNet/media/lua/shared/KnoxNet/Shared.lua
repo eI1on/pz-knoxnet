@@ -60,6 +60,7 @@ Shared.DEFAULT_SETTINGS = {
 	adminsCanRenameGroups = true,
 	adminsCanDisbandGroups = true,
 	notifyLiveMessages = true,
+	hideMenuDockButton = false,
 	rateLimitSeconds = 1,
 	retainMessagesIndefinitely = true,
 }
@@ -76,6 +77,7 @@ Shared.SETTINGS_KEYS = {
 	"adminsCanRenameGroups",
 	"adminsCanDisbandGroups",
 	"notifyLiveMessages",
+	"hideMenuDockButton",
 	"rateLimitSeconds",
 	"retainMessagesIndefinitely",
 }
@@ -123,6 +125,7 @@ function Shared.getSettings()
 		"adminsCanRenameGroups",
 		"adminsCanDisbandGroups",
 		"notifyLiveMessages",
+		"hideMenuDockButton",
 		"retainMessagesIndefinitely",
 	}
 	for i = 1, #boolKeys do
